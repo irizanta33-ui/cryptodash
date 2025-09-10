@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CryptoDash — CoinGecko-like (Single file) </title>
-  <meta name="description" content="Single-file CoinGecko-like market viewer, ready for GitHub Pages. Uses CoinGecko public API." />
+  <title>CryptoDash</title>
+  <meta name="description" content="Single-file market viewer, ready for GitHub Pages. Uses CoinGecko public API." />
 
   <!-- External libs (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -62,7 +62,7 @@
       <div class="brand">
         <div class="logo">CG</div>
         <div>
-          <h1>CryptoDash (CoinGecko-like)</h1>
+          <h1>CryptoDash</h1>
           <div class="small">Single-file SPA • Works on GitHub Pages</div>
         </div>
       </div>
@@ -258,7 +258,7 @@
           ['Circulating', fmt(info.market_data?.circulating_supply)],
           ['Total supply', fmt(info.market_data?.total_supply)]
         ];
-        metas.forEach(m=>{ const el = document.createElement('div'); el.className='m'; el.innerHTML = `<div class="small">${m[0]}</div><div style="font-weight:600">${m[1]}</div>`; els.meta.appendChild(el)});
+        metas.forEach(m=>{ const el = document.createElement('div'); el.className='m'; el.innerHTML = `<div class=\"small\">${m[0]}</div><div style=\"font-weight:600\">${m[1]}</div>`; els.meta.appendChild(el)});
 
         // description
         els.description.textContent = safeText(info.description?.en).slice(0,1200);
@@ -275,58 +275,4 @@
           const labels = market.prices.map(p=> new Date(p[0]).toLocaleDateString());
           const data = market.prices.map(p=> p[1]);
           chart = new Chart(ctx, {
-            type:'line', data:{labels, datasets:[{label: info.symbol.toUpperCase()+' price', data, tension:0.25, fill:true}]},
-            options:{scales:{x:{display:true}, y:{display:true}}}
-          });
-        }else{
-          ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
-        }
-
-        els.detailLoading.style.display='none';
-        els.detailArea.style.display='block';
-      }catch(e){
-        els.detailLoading.style.display='block';
-        els.detailLoading.textContent = 'Gagal memuat detail: '+e.message;
-        console.error(e);
-      }
-    }
-
-    function toggleFav(id){
-      if(favorites.includes(id)){ favorites = favorites.filter(x=>x!==id) } else { favorites.push(id) }
-      localStorage.setItem('cg_favs', JSON.stringify(favorites));
-      els.favcount.textContent = favorites.length;
-      // update fav button label if currently viewing that coin
-      const current = location.hash.split('/').pop(); if(current===id) els.favBtn.textContent = favorites.includes(id)?'★ Favorited':'☆ Favorite';
-    }
-
-    // router
-    function router(){
-      const h = location.hash || '#/';
-      if(h.startsWith('#/coin/')){
-        const id = h.split('/')[2];
-        showCoin(id);
-      }else{
-        // list view
-        els.detailLoading.style.display='block'; els.detailArea.style.display='none';
-        fetchMarkets();
-      }
-    }
-
-    // events
-    els.search.addEventListener('input', ()=>{ fetchMarkets(); });
-    els.order.addEventListener('change', ()=>{ order = els.order.value; localStorage.setItem('cg_order', order); fetchMarkets(); });
-    els.vs_currency.addEventListener('change', ()=>{ vs_currency = els.vs_currency.value; localStorage.setItem('cg_vs', vs_currency); fetchMarkets(); if(location.hash.startsWith('#/coin/')){ router(); } });
-    els.refresh.addEventListener('click', ()=>fetchMarkets());
-
-    window.addEventListener('hashchange', router);
-
-    // initial
-    router();
-
-    // friendly rate limit handling: refresh every 60s when on list view
-    let autoRefresh = setInterval(()=>{ if(!location.hash.startsWith('#/coin/')) fetchMarkets(); }, 60_000);
-
-  })();
-  </script>
-</body>
-</html>
+            type:'line', data:{labels, datasets:[{label: info.symbol.toUpperCase

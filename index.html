@@ -150,7 +150,12 @@ function fmt(n){ if(n===null||n===undefined) return '—'; if(typeof n==='number
 
 // ROUTER (hash-based)
 window.addEventListener('hashchange', route)
-function route(){ const h = location.hash.replace('#','') || '/'; if(h.startsWith('/coin/')){ const id = h.split('/')[2]; showDetail(id) } else { showList() } }
+function showList(){
+  // show list page, hide detail page
+  try{ $('#detailPage').style.display = 'none'; $('#listPage').style.display = 'block'; $('#favCount').textContent = state.favorites.size; // if coins not loaded yet, load them
+    if(!state.coins || state.coins.length === 0) loadMarket(); else renderList(); }catch(e){ console.error('showList error', e) }
+}
+function route(){ const h = location.hash.replace('#','') || '/'; if(h.startsWith('/coin/')){ const id = h.split('/')[2]; showDetail(id) } else { showList() } } else { showList() } }
 
 // LIST PAGE
 async function loadMarket(){ try{

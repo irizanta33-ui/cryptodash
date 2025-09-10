@@ -1,121 +1,332 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <title>VrizCoinDash</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CryptoDash — CoinGecko-like (Single file) </title>
+  <meta name="description" content="Single-file CoinGecko-like market viewer, ready for GitHub Pages. Uses CoinGecko public API." />
+
+  <!-- External libs (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
   <style>
-    body{font-family:Arial, sans-serif;background:#f9fafc;margin:0;padding:0;color:#333}
-    header{background:#111;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between}
-    header h1{margin:0;font-size:1.2em}
-    #controls{display:flex;gap:10px;flex-wrap:wrap}
-    #market-list{padding:20px}
-    .coin{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ddd;padding:8px 0;cursor:pointer}
-    .coin img{width:20px;height:20px;margin-right:8px}
-    .coin-name{display:flex;align-items:center}
-    #detail{padding:20px;display:none}
-    .loading{text-align:center;padding:20px}
-    button{cursor:pointer;padding:6px 12px;border-radius:6px;border:1px solid #aaa;background:#fff}
-    button:hover{background:#eee}
-    select,input{padding:6px}
-    .small{font-size:0.85em;}
+    :root{--bg:#0f172a;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{background:linear-gradient(180deg,#07102a 0%, #071a2f 100%);color:#e6eef6}
+    .container{max-width:1200px;margin:24px auto;padding:16px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#8b5cf6);display:flex;align-items:center;justify-content:center;font-weight:700}
+    .brand h1{font-size:18px;margin:0}
+    .searchbar{display:flex;gap:8px;align-items:center}
+    input[type=text]{background:var(--glass);border:1px solid rgba(255,255,255,0.04);padding:10px 12px;border-radius:10px;color:inherit;min-width:240px}
+    select,button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:inherit}
+
+    .layout{display:grid;grid-template-columns:1fr 420px;gap:18px;margin-top:18px}
+    @media (max-width:980px){.layout{grid-template-columns:1fr} .rightpanel{order:2}}
+
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+    .market-list{display:grid;row-gap:8px}
+    .row{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;transition:background .12s}
+    .row:hover{background:rgba(255,255,255,0.02);cursor:pointer}
+    .rank{width:36px;text-align:center;color:var(--muted)}
+    .coininfo{display:flex;align-items:center;gap:10px;flex:1}
+    .coinimg{width:34px;height:34px;border-radius:6px;background:#081226;display:flex;align-items:center;justify-content:center}
+    .coinname{display:flex;flex-direction:column}
+    .symbol{color:var(--muted);font-size:12px}
+    .price{min-width:120px;text-align:right}
+    .change.positive{color:#16a34a}
+    .change.negative{color:#ef4444}
+
+    .pagination{display:flex;gap:8px;justify-content:center;margin-top:12px}
+    .small{font-size:13px;color:var(--muted)}
+
+    .rightpanel{position:relative}
+    .detail-chart{height:260px}
+    .meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    .meta .m{background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.02);min-width:110px}
+
+    .loading{padding:28px;text-align:center;color:var(--muted)}
+    a.link{color:var(--accent);text-decoration:none}
+
+    footer{margin-top:18px;text-align:center;color:var(--muted);font-size:13px}
+
+    /* tiny responsive table for mobile */
+    @media (max-width:600px){.price{min-width:90px;font-size:14px}}
   </style>
 </head>
 <body>
-  <header>
-    <h1>VrizCoinDash</h1>
-    <div id="controls">
-      <button onclick="showList()">Market</button>
-      <button onclick="showFavs()">Favorites</button>
-      <input id="search" placeholder="Search" oninput="filterList()" />
-      <select id="order" onchange="changeOrder(this.value)">
-        <option value="market_cap_desc">Market Cap ↓</option>
-        <option value="market_cap_asc">Market Cap ↑</option>
-        <option value="volume_desc">Volume ↓</option>
-        <option value="volume_asc">Volume ↑</option>
-      </select>
-    </div>
-  </header>
-  <div id="market-list"></div>
-  <div id="detail">
-    <button onclick="backToList()">← Back</button>
-    <h2 id="detail-title"></h2>
-    <canvas id="chart" height="100"></canvas>
-    <div id="detail-info"></div>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo">CG</div>
+        <div>
+          <h1>CryptoDash (CoinGecko-like)</h1>
+          <div class="small">Single-file SPA • Works on GitHub Pages</div>
+        </div>
+      </div>
+
+      <div class="searchbar">
+        <input id="search" placeholder="Search coin name or symbol..." />
+        <select id="vs_currency" title="Currency">
+          <option value="usd">USD</option>
+          <option value="idr">IDR</option>
+          <option value="btc">BTC</option>
+        </select>
+        <select id="order">
+          <option value="market_cap_desc">Market Cap ↓</option>
+          <option value="market_cap_asc">Market Cap ↑</option>
+          <option value="volume_desc">Volume ↓</option>
+          <option value="id_asc">Name A→Z</option>
+        </select>
+        <button id="refresh">Refresh</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section>
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div><strong>Markets</strong> <span id="subtitle" class="small"></span></div>
+            <div class="small">Favorites: <span id="favcount">0</span></div>
+          </div>
+
+          <div id="list" class="market-list" style="margin-top:12px"></div>
+          <div id="list-loading" class="loading">Loading markets…</div>
+          <div class="pagination" id="pagination"></div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <strong>Info & Tips</strong>
+          <p class="small" style="margin-top:8px">This demo uses CoinGecko public API (no API key). To deploy: push this file as <code>index.html</code> to a GitHub repo and enable Pages from main branch (root).</p>
+        </div>
+      </section>
+
+      <aside class="rightpanel">
+        <div id="detail-card" class="card">
+          <div id="detail-loading" class="loading">Pilih koin dari daftar untuk melihat detail.</div>
+
+          <div id="detail" style="display:none">
+            <div style="display:flex;gap:12px;align-items:center">
+              <img id="detail-img" width="48" height="48" style="border-radius:8px;background:#07112a" />
+              <div>
+                <div style="display:flex;gap:8px;align-items:center"><strong id="detail-name"></strong><div class="small" id="detail-symbol"></div></div>
+                <div class="small" id="detail-marketcap"></div>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+                <button id="fav-btn">☆ Favorite</button>
+                <a id="coingecko-link" class="link small" target="_blank">Open on CoinGecko</a>
+              </div>
+            </div>
+
+            <div class="detail-chart card" style="margin-top:12px;padding:8px">
+              <canvas id="priceChart"></canvas>
+            </div>
+
+            <div class="meta" id="meta"></div>
+            <div style="margin-top:12px" id="description" class="small"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer>Built for demo — uses CoinGecko API • No API key required</footer>
   </div>
+
   <script>
-    const API_ROOT='https://api.coingecko.com/api/v3';
-    let page=1,perPage=20,order='market_cap_desc',vs_currency='usd';
-    const els={list:document.getElementById('market-list'),detail:document.getElementById('detail'),detailTitle:document.getElementById('detail-title'),detailInfo:document.getElementById('detail-info'),search:document.getElementById('search')};
+  // Single-file SPA JS
+  (function(){
+    const API_ROOT = 'https://api.coingecko.com/api/v3';
+    const perPage = 20;
+    let page = 1;
+    let order = localStorage.getItem('cg_order') || 'market_cap_desc';
+    let vs_currency = localStorage.getItem('cg_vs') || 'usd';
+    let favorites = JSON.parse(localStorage.getItem('cg_favs') || '[]');
+    const els = {
+      list: document.getElementById('list'),
+      loading: document.getElementById('list-loading'),
+      pagination: document.getElementById('pagination'),
+      subtitle: document.getElementById('subtitle'),
+      search: document.getElementById('search'),
+      vs_currency: document.getElementById('vs_currency'),
+      order: document.getElementById('order'),
+      refresh: document.getElementById('refresh'),
+      favcount: document.getElementById('favcount'),
+      detailLoading: document.getElementById('detail-loading'),
+      detailArea: document.getElementById('detail'),
+      detailName: document.getElementById('detail-name'),
+      detailSymbol: document.getElementById('detail-symbol'),
+      detailImg: document.getElementById('detail-img'),
+      detailMarketcap: document.getElementById('detail-marketcap'),
+      favBtn: document.getElementById('fav-btn'),
+      coingeckoLink: document.getElementById('coingecko-link'),
+      meta: document.getElementById('meta'),
+      description: document.getElementById('description')
+    };
+
+    // initialize selects
+    els.order.value = order;
+    els.vs_currency.value = vs_currency;
+    els.favcount.textContent = favorites.length;
+
+    // utilities
+    function fmt(n){ if(n === null || n === undefined) return '-'; if(Math.abs(n) >= 1e9) return (n/1e9).toFixed(2)+' B'; if(Math.abs(n) >= 1e6) return (n/1e6).toFixed(2)+' M'; if(Math.abs(n) >= 1e3) return (n/1e3).toFixed(2)+' K'; return n.toLocaleString(); }
+    function safeText(html){ if(!html) return ''; const d = new DOMParser().parseFromString(html,'text/html'); return d.body.textContent || ''; }
 
     async function fetchMarkets(){
       els.list.innerHTML='';
-      const q=new URLSearchParams({vs_currency,order,per_page:perPage,page,sparkline:'false'}).toString();
+      els.loading.style.display='block';
+      els.subtitle.textContent = `page ${page} • per-page ${perPage} • order ${order}`;
+      const q = new URLSearchParams({vs_currency, order, per_page: perPage, page, sparkline: 'false'}).toString();
       try{
-        const res=await fetch(`${API_ROOT}/coins/markets?${q}`);
+        const res = await fetch(`${API_ROOT}/coins/markets?${q}`);
         if(!res.ok) throw new Error('Network response not ok');
-        const data=await res.json();
-        localStorage.setItem('vriz_cache', JSON.stringify({time:Date.now(), data}));
+        const data = await res.json();
         renderMarkets(data);
       }catch(e){
+        els.list.innerHTML = `<div class="loading">Gagal memuat pasar — ${e.message}</div>`;
         console.error(e);
-        const cache=localStorage.getItem('vriz_cache');
-        if(cache){
-          const {time,data}=JSON.parse(cache);
-          renderMarkets(data);
-          const msg=document.createElement('div');
-          msg.className='small';
-          msg.style.color='orange';
-          msg.style.marginBottom='8px';
-          msg.textContent=`⚠️ Data dari cache (${new Date(time).toLocaleTimeString()}) karena gagal fetch: ${e.message}`;
-          els.list.prepend(msg);
-        }else{
-          els.list.innerHTML=`<div class="loading">Gagal memuat pasar — ${e.message}</div>`;
-        }
-      }
+      }finally{ els.loading.style.display='none'}
     }
 
-    function renderMarkets(data){
-      els.list.innerHTML='';
-      data.forEach(c=>{
-        const div=document.createElement('div');
-        div.className='coin';
-        div.innerHTML=`<div class="coin-name"><img src="${c.image}"/>${c.name} (${c.symbol.toUpperCase()})</div><div>$${c.current_price.toLocaleString()}</div>`;
-        div.onclick=()=>showDetail(c.id);
-        els.list.appendChild(div);
+    function renderMarkets(coins){
+      if(!Array.isArray(coins) || coins.length===0){ els.list.innerHTML='<div class="small">No results</div>'; return }
+      const q = els.search.value.trim().toLowerCase();
+      const filtered = q ? coins.filter(c=> (c.name+c.symbol).toLowerCase().includes(q)) : coins;
+
+      filtered.forEach((c, idx)=>{
+        const r = document.createElement('div'); r.className='row';
+        r.innerHTML = `
+          <div class="rank">${(page-1)*perPage + idx + 1}</div>
+          <div class="coininfo">
+            <div class="coinimg"><img src="${c.image}" width="34" height="34" style="border-radius:6px"/></div>
+            <div class="coinname">
+              <div><strong>${c.name}</strong></div>
+              <div class="symbol">${c.symbol.toUpperCase()}</div>
+            </div>
+          </div>
+          <div class="price">${formatCurrency(c.current_price)}</div>
+          <div class="price small">MCap ${fmt(c.market_cap)}</div>
+          <div class="price small ${c.price_change_percentage_24h >= 0 ? 'change positive' : 'change negative'}">${c.price_change_percentage_24h ? c.price_change_percentage_24h.toFixed(2)+'%' : '-'}</div>
+        `;
+        r.addEventListener('click',()=>{ location.hash = `#/coin/${c.id}` });
+        els.list.appendChild(r);
       });
+
+      renderPagination();
     }
 
-    async function showDetail(id){
-      els.list.style.display='none';
-      els.detail.style.display='block';
-      els.detailTitle.textContent='Loading...';
-      els.detailInfo.innerHTML='';
+    function renderPagination(){
+      els.pagination.innerHTML = '';
+      const prev = document.createElement('button'); prev.textContent='‹ Prev'; prev.disabled = page<=1; prev.onclick = ()=>{ page--; fetchMarkets(); };
+      const next = document.createElement('button'); next.textContent='Next ›'; next.onclick = ()=>{ page++; fetchMarkets(); };
+      els.pagination.appendChild(prev);
+      const pinfo = document.createElement('div'); pinfo.className='small'; pinfo.textContent=`Page ${page}`; pinfo.style.alignSelf='center'; els.pagination.appendChild(pinfo);
+      els.pagination.appendChild(next);
+    }
+
+    function formatCurrency(v){ if(v===null||v===undefined) return '-'; if(vs_currency==='usd') return '$'+Number(v).toLocaleString(); if(vs_currency==='idr') return 'Rp '+Number(v).toLocaleString(); return Number(v).toLocaleString() + ' '+vs_currency.toUpperCase(); }
+
+    // coin detail
+    let chart = null;
+    async function showCoin(id){
+      els.detailLoading.style.display='none';
+      els.detailArea.style.display='none';
+      els.detailLoading.style.display='block';
       try{
-        const [coin,mkt]=await Promise.all([
-          fetch(`${API_ROOT}/coins/${id}`).then(r=>r.json()),
-          fetch(`${API_ROOT}/coins/${id}/market_chart?vs_currency=${vs_currency}&days=7`).then(r=>r.json())
+        const [infoRes, marketRes] = await Promise.all([
+          fetch(`${API_ROOT}/coins/${id}`),
+          fetch(`${API_ROOT}/coins/${id}/market_chart?vs_currency=${vs_currency}&days=30&interval=daily`)
         ]);
-        els.detailTitle.textContent=`${coin.name} (${coin.symbol.toUpperCase()})`;
-        els.detailInfo.innerHTML=`<p>Current Price: $${coin.market_data.current_price[vs_currency]}</p>`;
-        renderChart(mkt.prices);
+        if(!infoRes.ok) throw new Error('Failed loading coin info');
+        const info = await infoRes.json();
+        const market = marketRes.ok ? await marketRes.json() : null;
+
+        els.detailName.textContent = info.name;
+        els.detailSymbol.textContent = info.symbol.toUpperCase();
+        els.detailImg.src = info.image.thumb || info.image.small || '';
+        els.detailMarketcap.textContent = `Market Cap Rank: #${info.market_cap_rank ?? '-'} • Market Cap: ${fmt(info.market_data?.market_cap?.[vs_currency] ?? null)}`;
+        els.coingeckoLink.href = `https://www.coingecko.com/en/coins/${info.id}`;
+
+        // meta
+        els.meta.innerHTML = '';
+        const metas = [
+          ['Price', formatCurrency(info.market_data?.current_price?.[vs_currency])],
+          ['24h', info.market_data?.price_change_percentage_24h ? info.market_data.price_change_percentage_24h.toFixed(2) + '%' : '-'],
+          ['7d', info.market_data?.price_change_percentage_7d ? info.market_data.price_change_percentage_7d.toFixed(2)+'%' : '-'],
+          ['Circulating', fmt(info.market_data?.circulating_supply)],
+          ['Total supply', fmt(info.market_data?.total_supply)]
+        ];
+        metas.forEach(m=>{ const el = document.createElement('div'); el.className='m'; el.innerHTML = `<div class="small">${m[0]}</div><div style="font-weight:600">${m[1]}</div>`; els.meta.appendChild(el)});
+
+        // description
+        els.description.textContent = safeText(info.description?.en).slice(0,1200);
+
+        // favorite button
+        const isFav = favorites.includes(info.id);
+        els.favBtn.textContent = isFav ? '★ Favorited' : '☆ Favorite';
+        els.favBtn.onclick = ()=>{ toggleFav(info.id) };
+
+        // chart
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        if(chart) chart.destroy();
+        if(market && market.prices){
+          const labels = market.prices.map(p=> new Date(p[0]).toLocaleDateString());
+          const data = market.prices.map(p=> p[1]);
+          chart = new Chart(ctx, {
+            type:'line', data:{labels, datasets:[{label: info.symbol.toUpperCase()+' price', data, tension:0.25, fill:true}]},
+            options:{scales:{x:{display:true}, y:{display:true}}}
+          });
+        }else{
+          ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+        }
+
+        els.detailLoading.style.display='none';
+        els.detailArea.style.display='block';
       }catch(e){
-        els.detailTitle.textContent='Error loading detail';
+        els.detailLoading.style.display='block';
+        els.detailLoading.textContent = 'Gagal memuat detail: '+e.message;
+        console.error(e);
       }
     }
 
-    function renderChart(prices){
-      const ctx=document.getElementById('chart').getContext('2d');
-      new Chart(ctx,{type:'line',data:{labels:prices.map(p=>new Date(p[0]).toLocaleDateString()),datasets:[{label:'Price',data:prices.map(p=>p[1])}]}});
+    function toggleFav(id){
+      if(favorites.includes(id)){ favorites = favorites.filter(x=>x!==id) } else { favorites.push(id) }
+      localStorage.setItem('cg_favs', JSON.stringify(favorites));
+      els.favcount.textContent = favorites.length;
+      // update fav button label if currently viewing that coin
+      const current = location.hash.split('/').pop(); if(current===id) els.favBtn.textContent = favorites.includes(id)?'★ Favorited':'☆ Favorite';
     }
 
-    function backToList(){els.detail.style.display='none';els.list.style.display='block';}
-    function showList(){els.detail.style.display='none';els.list.style.display='block';fetchMarkets();}
-    function showFavs(){alert('Favorites not implemented yet')}
-    function changeOrder(o){order=o;fetchMarkets();}
-    function filterList(){const q=els.search.value.toLowerCase();document.querySelectorAll('.coin').forEach(div=>{div.style.display=div.textContent.toLowerCase().includes(q)?'flex':'none'});}
+    // router
+    function router(){
+      const h = location.hash || '#/';
+      if(h.startsWith('#/coin/')){
+        const id = h.split('/')[2];
+        showCoin(id);
+      }else{
+        // list view
+        els.detailLoading.style.display='block'; els.detailArea.style.display='none';
+        fetchMarkets();
+      }
+    }
 
-    fetchMarkets();
+    // events
+    els.search.addEventListener('input', ()=>{ fetchMarkets(); });
+    els.order.addEventListener('change', ()=>{ order = els.order.value; localStorage.setItem('cg_order', order); fetchMarkets(); });
+    els.vs_currency.addEventListener('change', ()=>{ vs_currency = els.vs_currency.value; localStorage.setItem('cg_vs', vs_currency); fetchMarkets(); if(location.hash.startsWith('#/coin/')){ router(); } });
+    els.refresh.addEventListener('click', ()=>fetchMarkets());
+
+    window.addEventListener('hashchange', router);
+
+    // initial
+    router();
+
+    // friendly rate limit handling: refresh every 60s when on list view
+    let autoRefresh = setInterval(()=>{ if(!location.hash.startsWith('#/coin/')) fetchMarkets(); }, 60_000);
+
+  })();
   </script>
 </body>
 </html>

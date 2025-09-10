@@ -3,296 +3,117 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CryptoDash Pro — Market Explorer & Coin Detail</title>
-  <link rel="icon" href="data:," />
+  <title>CryptoDash Pro — Binance Edition</title>
   <style>
-    :root{--bg:#071026;--panel:#07182a;--muted:#98a4b2;--accent:#00d1b2;--danger:#ff6b6b}
-    [data-theme='light']{--bg:#f6f8fb;--panel:#ffffff;--muted:#475569;--accent:#0f766e;--danger:#d94660}
-    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui, -apple-system, 'Segoe UI', Roboto}
-    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#021021);color:#e6eef6}
-    .wrap{max-width:1200px;margin:20px auto;padding:16px}
-    header{display:flex;justify-content:space-between;align-items:center;gap:12px}
-    .brand{display:flex;gap:12px;align-items:center}
-    .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;color:#042}
-    .controls{display:flex;gap:8px;align-items:center}
-    input,select,button{padding:8px 12px;border-radius:10px;border:0;background:var(--panel);color:inherit}
-    main{margin-top:16px}
-    .card{background:var(--panel);padding:12px;border-radius:12px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:10px;text-align:left}
-    thead th{color:var(--muted);font-size:12px}
-    .muted{color:var(--muted)}
-    .spark{width:120px;height:36px}
-    .pill{display:inline-block;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.02)}
-    .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:8px}
-    .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
-    @media (max-width:980px){.grid{grid-template-columns:1fr} .logo{display:none}}
-
-    /* detail page */
-    #tvchart{height:520px;width:100%}
-    .info-list{display:flex;flex-direction:column;gap:8px}
-    .stat{display:flex;justify-content:space-between}
-    .range-buttons{display:flex;gap:8px;margin-bottom:8px}
-    .indicator-toggle{display:flex;gap:8px;align-items:center}
-    .back{cursor:pointer}
-    .links a{display:inline-block;margin-right:8px}
-    footer{margin-top:16px;color:var(--muted);font-size:13px}
+    body {margin:0;font-family:sans-serif;background:#0f172a;color:#e2e8f0}
+    header {display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b}
+    h1 {margin:0;font-size:1.2rem}
+    .container {padding:1rem}
+    table {width:100%;border-collapse:collapse}
+    th,td {padding:0.6rem;text-align:left;border-bottom:1px solid #334155}
+    tr:hover {background:#1e293b;cursor:pointer}
+    .muted {color:#94a3b8;font-size:0.9rem}
+    #detail {display:none;padding:1rem}
+    #chart {height:480px}
+    button {padding:0.4rem 0.8rem;border:0;border-radius:6px;background:#334155;color:white;cursor:pointer}
+    button:hover {background:#475569}
   </style>
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="brand">
-        <div class="logo">CD</div>
-        <div>
-          <div style="font-weight:700;font-size:18px">CryptoDash Pro</div>
-          <div class="muted" style="font-size:12px">Market explorer — click a coin to open detail page</div>
-        </div>
-      </div>
-      <div class="controls">
-        <input id="search" placeholder="Cari koin atau symbol (bitcoin, eth)" />
-        <select id="currency"><option value="usd">USD</option><option value="idr">IDR</option></select>
-        <button id="themeBtn">🌙</button>
-      </div>
-    </header>
+  <header>
+    <h1>📊 CryptoDash Pro</h1>
+    <div>
+      <button onclick="showList()">Home</button>
+    </div>
+  </header>
 
-    <main id="appMain">
-      <!-- list page -->
-      <section id="listPage">
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div><strong id="statsCount">—</strong> <span class="muted">coins</span></div>
-            <div class="muted">Favorites: <span id="favCount">0</span></div>
-          </div>
-          <div style="overflow:auto">
-            <table>
-              <thead>
-                <tr><th>#</th><th>Name</th><th>Price</th><th>24h %</th><th>Market Cap</th><th>Sparkline</th><th>Actions</th></tr>
-              </thead>
-              <tbody id="coinsTbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+  <main class="container">
+    <!-- Halaman List -->
+    <section id="list">
+      <h2>Market List (Binance)</h2>
+      <table>
+        <thead>
+          <tr><th>Symbol</th><th>Last Price</th><th>24h Change</th><th>Volume</th></tr>
+        </thead>
+        <tbody id="marketBody"></tbody>
+      </table>
+    </section>
 
-      <!-- detail page -->
-      <section id="detailPage" style="display:none">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div style="display:flex;gap:12px;align-items:center"><button id="backBtn" class="btn-ghost back">← Back</button><h2 id="coinTitle">Coin</h2></div>
-          <div class="muted" id="priceNow">—</div>
-        </div>
-
-        <div class="grid">
-          <div class="card">
-            <div class="range-buttons">
-              <button data-days="1" class="rangeBtn">1D</button>
-              <button data-days="7" class="rangeBtn">7D</button>
-              <button data-days="30" class="rangeBtn active">30D</button>
-              <button data-days="90" class="rangeBtn">90D</button>
-              <button data-days="365" class="rangeBtn">1Y</button>
-            </div>
-            <div class="indicator-toggle">
-              <label><input type="checkbox" id="smaToggle"/> SMA</label>
-              <label><input type="checkbox" id="emaToggle"/> EMA</label>
-            </div>
-            <div id="tvchart" class="card" style="margin-top:8px;padding:8px"></div>
-            <div id="chartNote" class="muted small" style="margin-top:8px">Candlestick chart — data from CoinGecko</div>
-          </div>
-
-          <aside class="card">
-            <div class="info-list">
-              <div><strong>About</strong><div id="coinDesc" class="muted small" style="margin-top:6px;max-height:220px;overflow:auto"></div></div>
-              <div><strong>Stats</strong>
-                <div class="muted small" style="margin-top:6px">
-                  <div class="stat"><span>Rank</span><span id="coinRank">—</span></div>
-                  <div class="stat"><span>Market Cap</span><span id="coinMarketCap">—</span></div>
-                  <div class="stat"><span>24h Volume</span><span id="coinVolume">—</span></div>
-                  <div class="stat"><span>Circulating / Total</span><span id="coinSupply">—</span></div>
-                  <div class="stat"><span>ATH</span><span id="coinATH">—</span></div>
-                  <div class="stat"><span>ATL</span><span id="coinATL">—</span></div>
-                </div>
-              </div>
-
-              <div><strong>Links</strong>
-                <div class="links muted small" id="coinLinks"></div>
-              </div>
-
-              <div style="display:flex;gap:8px;margin-top:8px">
-                <button id="favBtn" class="pill">☆ Add to Watchlist</button>
-                <button id="shareBtn" class="pill">Share</button>
-              </div>
-            </div>
-          </aside>
-        </div>
-      </section>
-    </main>
-
-    <footer class="muted">Built with CoinGecko API • Drop into GitHub Pages as index.html</footer>
-  </div>
+    <!-- Halaman Detail -->
+    <section id="detail">
+      <h2 id="coinTitle">Detail</h2>
+      <div id="chart"></div>
+      <p id="coinInfo" class="muted"></p>
+    </section>
+  </main>
 
 <script>
-// CONFIG
-const CONFIG = { BASE: 'https://api.coingecko.com/api/v3', API_KEY: '' }
-// STATE
-let state = { coins: [], favorites: new Set(JSON.parse(localStorage.getItem('cd:pro:favs')||'[]')), current: null }
-const $ = s => document.querySelector(s)
+const API = "https://api.binance.com/api/v3";
 
-// UTIL
-function api(path, params={}){
-  const url = new URL(CONFIG.BASE + path)
-  Object.entries(params).forEach(([k,v])=>{ if(v!==undefined) url.searchParams.set(k,v) })
-  const headers = CONFIG.API_KEY ? {'x-cg-pro-api-key': CONFIG.API_KEY} : {}
-  return fetch(url.toString(), { headers }).then(r=>{ if(!r.ok) throw new Error('API '+r.status); return r.json() })
+// Tampilkan daftar koin USDT utama
+async function loadMarket(){
+  const res = await fetch(`${API}/ticker/24hr`);
+  const data = await res.json();
+  const top = data.filter(d=>d.symbol.endsWith("USDT"))
+                  .slice(0,20); // 20 coin teratas
+  const tbody = document.getElementById("marketBody");
+  tbody.innerHTML = "";
+  top.forEach(c=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${c.symbol}</td>
+                  <td>${parseFloat(c.lastPrice).toFixed(4)}</td>
+                  <td style="color:${c.priceChangePercent>=0?'#4ade80':'#f87171'}">
+                    ${parseFloat(c.priceChangePercent).toFixed(2)}%
+                  </td>
+                  <td>${Number(c.quoteVolume).toFixed(0)}</td>`;
+    tr.onclick=()=>showDetail(c.symbol);
+    tbody.appendChild(tr);
+  });
 }
-function fmt(n){ if(n===null||n===undefined) return '—'; if(typeof n==='number'){ if(Math.abs(n)>1e12) return (n/1e12).toFixed(2)+'T'; if(Math.abs(n)>1e9) return (n/1e9).toFixed(2)+'B'; if(Math.abs(n)>1e6) return (n/1e6).toFixed(2)+'M'; if(Math.abs(n)>1e3) return (n/1e3).toFixed(2)+'k'; return n.toLocaleString() } return n }
 
-// ROUTER (hash-based)
-window.addEventListener('hashchange', route)
+// Tampilkan halaman detail
+async function showDetail(symbol){
+  document.getElementById("list").style.display="none";
+  document.getElementById("detail").style.display="block";
+  document.getElementById("coinTitle").textContent=symbol;
+
+  // ambil candlestick (daily)
+  const res = await fetch(`${API}/klines?symbol=${symbol}&interval=1d&limit=100`);
+  const data = await res.json();
+
+  // mapping ke format lightweight-charts
+  const candles = data.map(c=>({
+    time: Math.floor(c[0]/1000),
+    open: parseFloat(c[1]),
+    high: parseFloat(c[2]),
+    low: parseFloat(c[3]),
+    close: parseFloat(c[4])
+  }));
+
+  document.getElementById("chart").innerHTML=""; // reset
+  const chart = LightweightCharts.createChart(document.getElementById("chart"),{
+    layout:{background:{color:'#0f172a'},textColor:'#e2e8f0'},
+    grid:{vertLines:{color:'#1e293b'},horzLines:{color:'#1e293b'}},
+    timeScale:{borderColor:'#334155'},rightPriceScale:{borderColor:'#334155'}
+  });
+  const candleSeries=chart.addCandlestickSeries();
+  candleSeries.setData(candles);
+
+  // Info singkat
+  const last = candles[candles.length-1];
+  document.getElementById("coinInfo").textContent =
+    `Open: ${last.open} | High: ${last.high} | Low: ${last.low} | Close: ${last.close}`;
+}
+
+// Balik ke list
 function showList(){
-  // show list page, hide detail page
-  try{ $('#detailPage').style.display = 'none'; $('#listPage').style.display = 'block'; $('#favCount').textContent = state.favorites.size; // if coins not loaded yet, load them
-    if(!state.coins || state.coins.length === 0) loadMarket(); else renderList(); }catch(e){ console.error('showList error', e) }
-}
-function route(){ const h = location.hash.replace('#','') || '/'; if(h.startsWith('/coin/')){ const id = h.split('/')[2]; showDetail(id) } else { showList() } } else { showList() } }
-
-// LIST PAGE
-async function loadMarket(){ try{
-  const per_page = 50
-  const data = await api('/coins/markets', { vs_currency: $('#currency').value, order:'market_cap_desc', per_page, page:1, sparkline:true, price_change_percentage:'24h' })
-  state.coins = data
-  renderList()
-  $('#statsCount').textContent = data.length
- }catch(e){ console.error(e); $('#coinsTbody').innerHTML = '<tr><td colspan="7">Error loading</td></tr>' }
-}
-function renderList(){ const tbody = $('#coinsTbody'); tbody.innerHTML=''
-  state.coins.forEach((c, i)=>{
-    const tr = document.createElement('tr')
-    tr.innerHTML = `
-      <td>${i+1}</td>
-      <td style="min-width:180px"><img src="${c.image}" width="20" style="vertical-align:middle;border-radius:6px"/> <a href="#/coin/${c.id}">${c.name}</a><div class='muted small'>${c.symbol.toUpperCase()}</div></td>
-      <td class='price'>${c.current_price!==null? c.current_price.toLocaleString(): '—'}</td>
-      <td style='color:${c.price_change_percentage_24h>=0?"#4ade80":"#ff8383"}'>${c.price_change_percentage_24h?.toFixed(2)??'—'}%</td>
-      <td class='muted'>${fmt(c.market_cap)}</td>
-      <td><canvas class='spark' data-idx='${i}'></canvas></td>
-      <td><button class='pill fav' data-id='${c.id}'>${state.favorites.has(c.id)?'★':'☆'}</button> <button class='pill' onclick="location.hash='#/coin/${c.id}'">Detail</button></td>
-    `
-    tbody.appendChild(tr)
-  })
-  document.querySelectorAll('.fav').forEach(b=>b.onclick = toggleFav)
-  document.querySelectorAll('.spark').forEach(cv=>{ const coin = state.coins[cv.dataset.idx]; if(!coin.sparkline_in_7d) return; new Chart(cv.getContext('2d'),{type:'line',data:{labels:coin.sparkline_in_7d.price.map((_,i)=>i),datasets:[{data:coin.sparkline_in_7d.price,pointRadius:0,borderWidth:1}]},options:{plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:false}},elements:{line:{tension:0.2}}}}) })
-}
-function toggleFav(e){ const id = e.target.dataset.id; if(state.favorites.has(id)) state.favorites.delete(id); else state.favorites.add(id); localStorage.setItem('cd:pro:favs', JSON.stringify([...state.favorites])); renderList(); $('#favCount').textContent = state.favorites.size }
-
-// DETAIL PAGE
-let chart = null, candleSeries=null, smaSeries=null, emaSeries=null
-async function showDetail(id){ // set UI
-  $('#listPage').style.display='none'; $('#detailPage').style.display='block'; $('#favCount').textContent = state.favorites.size
-  try{
-    state.current = id
-    const [meta, market] = await Promise.all([
-      api(`/coins/${id}`, { localization:false, tickers:false, market_data:true, community_data:false, developer_data:false, sparkline:false }),
-      api(`/coins/${id}/market_chart`, { vs_currency: $('#currency').value, days: 90, interval:'hourly' })
-    ])
-    // meta contains description, links, market_data
-    $('#coinTitle').textContent = meta.name + ' (' + (meta.symbol || '').toUpperCase() + ')'
-    $('#priceNow').textContent = meta.market_data?.current_price ? (meta.market_data.current_price[$('#currency').value] || '—') : '—'
-    $('#coinDesc').innerHTML = meta.description?.en ? meta.description.en : '<i>No description</i>'
-    $('#coinRank').textContent = meta.market_cap_rank ?? '—'
-    $('#coinMarketCap').textContent = meta.market_data?.market_cap ? fmt(meta.market_data.market_cap[$('#currency').value]) : '—'
-    $('#coinVolume').textContent = meta.market_data?.total_volume ? fmt(meta.market_data.total_volume[$('#currency').value]) : '—'
-    $('#coinSupply').textContent = (meta.market_data?.circulating_supply ? fmt(meta.market_data.circulating_supply) : '—') + ' / ' + (meta.market_data?.total_supply ? fmt(meta.market_data.total_supply) : '—')
-    $('#coinATH').textContent = meta.market_data?.ath ? (meta.market_data.ath[$('#currency').value] || '—') + ' on ' + new Date(meta.market_data.ath_date[$('#currency').value] || meta.market_data.ath_date?.usd || '').toLocaleDateString() : '—'
-    $('#coinATL').textContent = meta.market_data?.atl ? (meta.market_data.atl[$('#currency').value] || '—') + ' on ' + new Date(meta.market_data.atl_date[$('#currency').value] || meta.market_data.atl_date?.usd || '').toLocaleDateString() : '—'
-    // links
-    const links = []
-    if(meta.links?.homepage?.[0]) links.push({t:'Website',u:meta.links.homepage[0]})
-    if(meta.links?.blockchain_site?.[0]) links.push({t:'Explorer',u:meta.links.blockchain_site[0]})
-    if(meta.links?.subreddit_url) links.push({t:'Reddit',u:meta.links.subreddit_url})
-    if(meta.links?.repos_url?.github?.length) links.push({t:'GitHub',u:meta.links.repos_url.github[0]})
-    $('#coinLinks').innerHTML = links.map(l=>`<a href="${l.u}" target="_blank" rel="noopener noreferrer">${l.t}</a>`).join(' ')
-
-    // prepare chart data from market.prices + market.total_volumes + market.market_caps
-    const prices = market.prices.map(p=>({time:Math.floor(p[0]/1000), value:p[1]}))
-    // try OHLC endpoint for candles (CoinGecko has /coins/{id}/ohlc for up to 90 days)
-    let ohlc = []
-    try{ ohlc = await api(`/coins/${id}/ohlc`, { vs_currency: $('#currency').value, days: 90 }) } catch(e){ console.warn('ohlc not available', e) }
-
-    renderChart(ohlc.length?ohlc:convertPricesToCandles(market.prices))
-    // fav button
-    $('#favBtn').textContent = state.favorites.has(id) ? '★ In Watchlist' : '☆ Add to Watchlist'
-    $('#favBtn').onclick = ()=>{ if(state.favorites.has(id)) state.favorites.delete(id); else state.favorites.add(id); localStorage.setItem('cd:pro:favs', JSON.stringify([...state.favorites])); $('#favBtn').textContent = state.favorites.has(id) ? '★ In Watchlist' : '☆ Add to Watchlist'; $('#favCount').textContent = state.favorites.size }
-    $('#shareBtn').onclick = ()=>{ navigator.share ? navigator.share({title:meta.name, text:'Check this coin on CryptoDash Pro', url:location.href}) : prompt('Copy link', location.href) }
-  }catch(e){ console.error(e); alert('Gagal muat detail: '+e.message) }
+  document.getElementById("detail").style.display="none";
+  document.getElementById("list").style.display="block";
 }
 
-function convertPricesToCandles(prices){ // naive conversion: group per day/hour depending on range
-  // prices: [[timestamp, price], ...]
-  // we'll make 1-hour candles if dataset > 48 points, else 1-day
-  const points = prices.map(p=>[p[0], p[1]])
-  if(points.length===0) return []
-  const span = (points[points.length-1][0] - points[0][0])
-  const unit = span / (points.length) // approx ms per point
-  // determine bucket size: if unit < 3.6e6 use hourly; else daily
-  const bucket = unit < 3.6e6 ? 3600000 : 86400000
-  const buckets = {}
-  points.forEach(p=>{ const b = Math.floor(p[0]/bucket)*bucket; if(!buckets[b]) buckets[b]=[]; buckets[b].push(p[1]) })
-  return Object.keys(buckets).sort().map(k=>{ const arr=buckets[k]; return [Number(k), arr[0], Math.max(...arr), Math.min(...arr), arr[arr.length-1]] })
-}
-
-function renderChart(candles){ // candles: [[ts, open, high, low, close], ...]
-  const target = document.getElementById('tvchart')
-  target.innerHTML = ''
-  if(chart) chart.remove()
-  chart = LightweightCharts.createChart(target, { layout:{background:{color:'transparent'},textColor:'#cfd8e3'}, grid:{vertLines:{color:'#19303f'},horzLines:{color:'#19303f'}}, rightPriceScale:{borderColor:'#2b5878'}, timeScale:{borderVisible:true}})
-  candleSeries = chart.addCandlestickSeries()
-  const data = candles.map(c=>({time:Math.floor(c[0]/1000), open:c[1], high:c[2], low:c[3], close:c[4]}))
-  candleSeries.setData(data)
-  // default hide indicators
-  if($('#smaToggle').checked) applySMA(data, 14)
-  if($('#emaToggle').checked) applyEMA(data, 14)
-}
-
-function applySMA(data, period=14){ // data: [{time,open,high,low,close}]
-  const closes = data.map(d=>d.close)
-  const sma = simpleMA(closes, period)
-  const series = chart.addLineSeries({color:'#ffcc00',lineWidth:1.5})
-  const smaData = sma.map((v,i)=>({time:data[i+period-1].time, value:v})).filter(Boolean)
-  series.setData(smaData)
-  smaSeries = series
-}
-function applyEMA(data, period=14){ const closes=data.map(d=>d.close); const ema = expMA(closes, period); const series = chart.addLineSeries({color:'#00a3ff',lineWidth:1.3}); const emaData=ema.map((v,i)=>({time:data[i+period-1].time, value:v})).filter(Boolean); series.setData(emaData); emaSeries = series }
-
-function simpleMA(arr, period){ const out=[]; for(let i=0;i<=arr.length-period;i++){ const slice=arr.slice(i,i+period); const s=slice.reduce((a,b)=>a+b,0)/period; out.push(s) } return out }
-function expMA(arr, period){ const k = 2/(period+1); const out=[]; // start with SMA as seed
-  let prev = arr.slice(0,period).reduce((a,b)=>a+b,0)/period; for(let i=period;i<arr.length;i++){ const v = arr[i]*k + prev*(1-k); out.push(v); prev = v } return out }
-
-// interactions
-$('#backBtn').onclick = ()=>{ location.hash = '/' }
-document.querySelectorAll('.rangeBtn').forEach(b=>b.onclick = async (e)=>{ document.querySelectorAll('.rangeBtn').forEach(x=>x.classList.remove('active')); e.target.classList.add('active'); const days = e.target.dataset.days; // reload market_chart for that range
-  if(!state.current) return; const id = state.current; const market = await api(`/coins/${id}/market_chart`, { vs_currency: $('#currency').value, days, interval: days<=1 ? 'minutely' : 'hourly' }); let ohlc = [];
-  try{ ohlc = await api(`/coins/${id}/ohlc`, { vs_currency: $('#currency').value, days }) }catch(e){ ohlc = convertPricesToCandles(market.prices) }
-  renderChart(ohlc.length?ohlc:convertPricesToCandles(market.prices)) }
-)
-
-// toggles for indicators
-$('#smaToggle').onchange = ()=>{ if(smaSeries) smaSeries.remove(); if($('#smaToggle').checked && candleSeries){ const data = candleSeries?[]:[]; const seriesData = candleSeries?null:null; // fetch current data from candleSeries
-  try{ const raw = candleSeries._data || []; // internal access (best-effort)
-    const dataArray = raw.map(r=>({time:r.time, open:r.open, high:r.high, low:r.low, close:r.close})); applySMA(dataArray,14) }catch(e){ console.warn('Cannot read series internals',e) } }
-}
-$('#emaToggle').onchange = ()=>{ if(emaSeries) emaSeries.remove(); if($('#emaToggle').checked){ try{ const raw = candleSeries._data || []; const dataArray = raw.map(r=>({time:r.time, open:r.open, high:r.high, low:r.low, close:r.close})); applyEMA(dataArray,14) }catch(e){ console.warn('cannot read series internals',e) } } }
-
-// init
-$('#currency').onchange = ()=> loadMarket()
-$('#search').oninput = ()=>{ const q = $('#search').value.toLowerCase().trim(); if(!q) return renderList(); const filtered = state.coins.filter(c=> c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q)); // quick client-side filter
-  const tbody = $('#coinsTbody'); tbody.innerHTML=''; filtered.forEach((c,i)=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${i+1}</td><td><img src="${c.image}" width=20/> <a href="#/coin/${c.id}">${c.name}</a><div class='muted small'>${c.symbol.toUpperCase()}</div></td><td>${c.current_price?.toLocaleString()??'—'}</td><td>${c.price_change_percentage_24h?.toFixed(2)??'—'}%</td><td>${fmt(c.market_cap)}</td><td>—</td><td><button class='pill fav' data-id='${c.id}'>${state.favorites.has(c.id)?'★':'☆'}</button></td>`; tbody.appendChild(tr) })
-  document.querySelectorAll('.fav').forEach(b=>b.onclick = toggleFav)
-}
-
-// start
-loadMarket().then(()=>{ $('#favCount').textContent = state.favorites.size; route() })
-
+// load awal
+loadMarket();
 </script>
 </body>
 </html>

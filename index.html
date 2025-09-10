@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CryptoDash — Market Explorer</title>
+  <link rel="icon" href="data:," />
+  <style>
+    /* Minimal, modern styling */
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#00d1b2;--danger:#ff6b6b;--glass: rgba(255,255,255,0.03)}
+    [data-theme='light']{--bg:#f5f7fa;--card:#ffffff;--muted:#475569;--accent:#0f766e;--danger:#d94660;--glass: rgba(15,23,42,0.03)}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#071024);color:#e6eef6}
+    .container{max-width:1200px;margin:24px auto;padding:16px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;color:#042;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    input[type='search']{padding:8px 12px;border-radius:10px;border:0;min-width:220px;background:var(--card);color:inherit}
+    select,button{padding:8px 12px;border-radius:10px;border:0;background:var(--card);color:inherit}
+    .card{background:var(--card);border-radius:14px;padding:12px;margin-top:16px;box-shadow:0 6px 30px rgba(2,6,23,0.55)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:10px;text-align:left}
+    thead th{color:var(--muted);font-weight:600;font-size:12px}
+    tbody tr{border-top:1px solid rgba(255,255,255,0.03)}
+    .price{font-weight:700}
+    .spark{width:120px;height:36px}
+    .pill{display:inline-block;padding:6px 8px;border-radius:999px;background:var(--glass);font-size:12px}
+    .muted{color:var(--muted)}
+    .actions{display:flex;gap:8px}
+    .fav{cursor:pointer}
+    .pagination{display:flex;gap:8px;align-items:center}
+    .footer{margin-top:16px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between}
+    @media (max-width:900px){.spark{display:none}table thead th:nth-child(6),table tbody td:nth-child(6){display:none}}
+    /* modal */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px}
+    .modal.show{display:flex}
+    .modal .panel{max-width:900px;width:100%;background:var(--card);border-radius:14px;padding:16px}
+    .small{font-size:12px}
+  </style>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container" id="app">
+    <header>
+      <div class="brand">
+        <div class="logo">CD</div>
+        <div>
+          <h1>CryptoDash</h1>
+          <div class="muted small">Market explorer — static GitHub Pages demo</div>
+        </div>
+      </div>
+      <div class="controls">
+        <input id="search" type="search" placeholder="Cari koin (contoh: bitcoin)" />
+        <select id="currency"><option value="usd">USD</option><option value="idr">IDR</option><option value="btc">BTC</option></select>
+        <select id="perPage"><option>10</option><option selected>25</option><option>50</option><option>100</option></select>
+        <button id="themeBtn" title="Toggle theme">🌙</button>
+        <button id="refresh">↻</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong id="statsCount">—</strong> <span class="muted">coins</span>
+        </div>
+        <div class="pagination">
+          <button id="prev">Prev</button>
+          <div class="muted small">Page <span id="pageNum">1</span></div>
+          <button id="next">Next</button>
+        </div>
+      </div>
+
+      <div style="overflow:auto;margin-top:12px">
+        <table aria-live="polite">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Price</th>
+              <th>24h %</th>
+              <th>Market Cap</th>
+              <th class="muted">Sparkline (7d)</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="coinsTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="footer">
+        <div class="muted">Data provided by CoinGecko</div>
+        <div>
+          <span class="muted">Favorites:</span> <span id="favCount">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- modal for coin detail -->
+    <div id="modal" class="modal" role="dialog" aria-modal="true">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 id="modalTitle">Coin</h3>
+          <div><button id="closeModal">Close</button></div>
+        </div>
+        <div id="modalBody">
+          <canvas id="coinChart" style="width:100%;height:320px"></canvas>
+          <div id="modalInfo" class="muted small" style="margin-top:8px">—</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+/* CONFIG */
+const CONFIG = {
+  COINGECKO_API_KEY: '', // optional: set if you have a Demo / Pro key
+  BASE: 'https://api.coingecko.com/api/v3'
+}
+
+/* State */
+let state = {page:1, perPage:25, vs_currency:'usd', coins:[], favorites: new Set(JSON.parse(localStorage.getItem('cd:favs')||'[]'))}
+
+/* Helpers */
+const $ = selector => document.querySelector(selector)
+const el = (tag, attrs={}, ...children) => { const e=document.createElement(tag); Object.assign(e, attrs); children.forEach(c=>{if(typeof c==='string') e.appendChild(document.createTextNode(c)); else if(c) e.appendChild(c)}); return e }
+
+function setTheme(theme){ document.documentElement.setAttribute('data-theme', theme); $('#themeBtn').textContent = theme==='light' ? '☀️' : '🌙' }
+
+function apiFetch(path, params={}){
+  const url = new URL(CONFIG.BASE + path)
+  Object.entries(params).forEach(([k,v])=>{ if(v!==undefined && v!==null) url.searchParams.set(k,v)})
+  const headers = CONFIG.COINGECKO_API_KEY ? {'x-cg-pro-api-key': CONFIG.COINGECKO_API_KEY} : {}
+  return fetch(url.toString(), {headers}).then(r=>{ if(!r.ok) throw new Error('API error '+r.status); return r.json() })
+}
+
+/* Render coins table */
+async function loadCoins(){
+  $('#coinsTbody').innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>'
+  try{
+    const per_page = state.perPage
+    const data = await apiFetch('/coins/markets', {vs_currency: state.vs_currency, order:'market_cap_desc', per_page: per_page, page: state.page, sparkline: true, price_change_percentage: '24h'})
+    state.coins = data
+    renderTable()
+    $('#statsCount').textContent = data.length
+  }catch(e){ $('#coinsTbody').innerHTML = '<tr><td colspan="7" class="muted">Error loading data — '+e.message+'</td></tr>' }
+}
+
+function fmt(n){ if(n===null||n===undefined) return '—'; if(Math.abs(n)>1e9) return (n/1e9).toFixed(2)+'B'; if(Math.abs(n)>1e6) return (n/1e6).toFixed(2)+'M'; if(Math.abs(n)>1e3) return (n/1e3).toFixed(2)+'k'; return n }
+
+function renderTable(){
+  const tbody = $('#coinsTbody'); tbody.innerHTML=''
+  state.coins.forEach((c, idx)=>{
+    const tr = document.createElement('tr')
+    tr.innerHTML = `
+      <td>${(state.page-1)*state.perPage + idx + 1}</td>
+      <td><div style="display:flex;gap:8px;align-items:center"><img src="${c.image}" width="22" height="22" alt="" style="border-radius:6px"/><div><strong>${c.name}</strong><div class="muted small">${c.symbol.toUpperCase()}</div></div></div></td>
+      <td class="price">${c.current_price!==null? c.current_price.toLocaleString(): '—'}</td>
+      <td style="color:${c.price_change_percentage_24h>=0?'#4ade80':'#ff8383'}">${c.price_change_percentage_24h ? c.price_change_percentage_24h.toFixed(2)+'%':'—'}</td>
+      <td class="muted">${fmt(c.market_cap)}</td>
+      <td><canvas class="spark" data-idx="${idx}"></canvas></td>
+      <td class="actions"><span class="pill fav" data-id="${c.id}" title="Toggle favorite">${state.favorites.has(c.id)?'★':'☆'}</span> <button data-id="${c.id}" class="detail">Detail</button></td>
+    `
+    tbody.appendChild(tr)
+  })
+  // draw sparklines
+  document.querySelectorAll('.spark').forEach(canvas=>{
+    const idx = +canvas.dataset.idx; const coin = state.coins[idx];
+    if(!coin || !coin.sparkline_in_7d || !coin.sparkline_in_7d.price) return
+    const prices = coin.sparkline_in_7d.price.slice(-30) // show last 30 points
+    canvas.width = 120; canvas.height = 36
+    new Chart(canvas.getContext('2d'),{type:'line',data:{labels:prices.map((_,i)=>i),datasets:[{data:prices,fill:false,pointRadius:0,borderWidth:1}]},options:{animation:false, responsive:false, plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:false}}}})
+  })
+  // attach listeners
+  document.querySelectorAll('.fav').forEach(btn=>btn.onclick = toggleFav)
+  document.querySelectorAll('.detail').forEach(btn=>btn.onclick = e=>openDetail(e.target.dataset.id))
+  $('#favCount').textContent = state.favorites.size
+}
+
+function toggleFav(e){ const id = e.currentTarget.dataset.id || e.target.dataset.id; if(state.favorites.has(id)) state.favorites.delete(id); else state.favorites.add(id); localStorage.setItem('cd:favs', JSON.stringify(Array.from(state.favorites))); renderTable(); }
+
+/* Detail modal */
+let coinChart = null
+async function openDetail(id){
+  $('#modal').classList.add('show')
+  try{
+    $('#modalTitle').textContent = 'Loading…'
+    const info = state.coins.find(x=>x.id===id)
+    $('#modalTitle').textContent = info ? info.name + ' — ' + (info.symbol||'').toUpperCase() : id
+    // fetch 30 days market chart
+    const chart = await apiFetch(`/coins/${id}/market_chart`, {vs_currency: state.vs_currency, days:30})
+    const prices = chart.prices.map(p=> ({t:new Date(p[0]), v:p[1]}))
+    const ctx = $('#coinChart').getContext('2d')
+    if(coinChart) coinChart.destroy()
+    coinChart = new Chart(ctx, {type:'line',data:{labels:prices.map(p=>p.t.toLocaleDateString()),datasets:[{label:'Price',data:prices.map(p=>p.v),fill:true,pointRadius:0}]},options:{plugins:{legend:{display:false}}}})
+    $('#modalInfo').textContent = `Current price: ${prices.length?prices[prices.length-1].v.toLocaleString(): '—'} | Data points: ${prices.length}`
+  }catch(e){ $('#modalInfo').textContent = 'Error: '+e.message }
+}
+
+$('#closeModal').addEventListener('click', ()=>$('#modal').classList.remove('show'))
+
+/* Controls */
+$('#perPage').addEventListener('change', e=>{ state.perPage = +e.target.value; state.page = 1; $('#pageNum').textContent = state.page; loadCoins() })
+$('#currency').addEventListener('change', e=>{ state.vs_currency = e.target.value; loadCoins() })
+$('#search').addEventListener('input', e=>{ const q = e.target.value.toLowerCase().trim(); const filtered = state.coins.filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q)); if(q==='') renderTable(); else renderFiltered(filtered) })
+
+function renderFiltered(list){ const tbody = $('#coinsTbody'); tbody.innerHTML=''; list.forEach((c,idx)=>{ const tr = document.createElement('tr'); tr.innerHTML = `<td>${idx+1}</td><td><div style="display:flex;gap:8px;align-items:center"><img src="${c.image}" width="22" height="22" alt="" style="border-radius:6px"/><div><strong>${c.name}</strong><div class="muted small">${c.symbol.toUpperCase()}</div></div></div></td><td class="price">${c.current_price!==null? c.current_price.toLocaleString(): '—'}</td><td style="color:${c.price_change_percentage_24h>=0?'#4ade80':'#ff8383'}">${c.price_change_percentage_24h ? c.price_change_percentage_24h.toFixed(2)+'%':'—'}</td><td class="muted">${fmt(c.market_cap)}</td><td class="muted">—</td><td class="actions"><span class="pill fav" data-id="${c.id}" title="Toggle favorite">${state.favorites.has(c.id)?'★':'☆'}</span> <button data-id="${c.id}" class="detail">Detail</button></td>`; tbody.appendChild(tr) })
+  document.querySelectorAll('.fav').forEach(btn=>btn.onclick = toggleFav)
+  document.querySelectorAll('.detail').forEach(btn=>btn.onclick = e=>openDetail(e.target.dataset.id))
+}
+
+$('#prev').addEventListener('click', ()=>{ if(state.page>1) { state.page--; $('#pageNum').textContent = state.page; loadCoins() } })
+$('#next').addEventListener('click', ()=>{ state.page++; $('#pageNum').textContent = state.page; loadCoins() })
+$('#refresh').addEventListener('click', ()=>loadCoins())
+$('#themeBtn').addEventListener('click', ()=> setTheme(document.documentElement.getAttribute('data-theme')==='light' ? 'dark' : 'light'))
+
+// init
+(function(){ setTheme('dark'); $('#pageNum').textContent = state.page; // set perPage select value
+  $('#perPage').value = state.perPage
+  loadCoins()
+})()
+</script>
+</body>
+</html>

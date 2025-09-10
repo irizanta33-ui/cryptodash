@@ -1,147 +1,171 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="id">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>VrizCoinDash</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="description" content="Crypto dashboard mirip CoinGecko dengan caching dan proxy fallback." />
+
+  <!-- External libs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
   <style>
-    body{font-family:Arial, sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:0}
-    header{background:#161b22;color:#fff;padding:15px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-    header h1{margin:0;font-size:1.3em;color:#58a6ff}
-    #controls{display:flex;gap:10px;flex-wrap:wrap}
-    #controls button,#controls select,#controls input{background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:6px 10px}
-    #controls button:hover{background:#30363d}
-    #market-list{padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:15px}
-    .coin{background:#161b22;padding:15px;border:1px solid #30363d;border-radius:12px;cursor:pointer;transition:transform .2s, box-shadow .2s}
-    .coin:hover{transform:translateY(-3px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
-    .coin-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-    .coin-header img{width:28px;height:28px}
-    .coin-name{font-weight:bold;font-size:1.05em}
-    .coin-price{font-size:1.1em;margin:5px 0}
-    .coin-change.up{color:#3fb950}
-    .coin-change.down{color:#f85149}
-    #detail{padding:20px;display:none}
-    #detail h2{margin-top:0;color:#58a6ff}
-    canvas{background:#fff;border-radius:8px;padding:10px}
-    .loading{text-align:center;padding:20px}
-    .small{font-size:0.85em;color:orange;margin-bottom:8px}
+    :root{
+      --bg:#0f172a;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--glass:rgba(255,255,255,0.03)
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(180deg,#07102a 0%,#071a2f 100%);color:#e6eef6}
+    .container{max-width:1200px;margin:0 auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:42px;height:42px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#8b5cf6);display:flex;align-items:center;justify-content:center;font-weight:700}
+    h1{margin:0;font-size:20px}
+
+    .searchbar{display:flex;gap:8px;align-items:center}
+    input,select,button{background:var(--glass);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:inherit;padding:8px 10px}
+
+    .layout{display:grid;grid-template-columns:1fr 420px;gap:18px}
+    @media(max-width:980px){.layout{grid-template-columns:1fr}.rightpanel{order:2}}
+
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.04)}
+    .market-list{display:grid;row-gap:8px;margin-top:12px}
+    .row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;transition:background .12s}
+    .row:hover{background:rgba(255,255,255,0.04);cursor:pointer}
+    .rank{width:32px;text-align:center;color:var(--muted)}
+    .coininfo{display:flex;align-items:center;gap:10px;flex:1}
+    .coinimg img{border-radius:6px}
+    .coinname{display:flex;flex-direction:column}
+    .symbol{font-size:12px;color:var(--muted)}
+    .price{text-align:right;min-width:100px}
+    .change.positive{color:#22c55e}
+    .change.negative{color:#ef4444}
+
+    .pagination{display:flex;gap:8px;justify-content:center;margin-top:12px}
+    .small{font-size:13px;color:var(--muted)}
+
+    .detail-chart{height:300px}
+    .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+    .meta .m{background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);min-width:110px}
+
+    .loading{text-align:center;color:var(--muted);padding:20px}
+    .error{color:#f87171;font-size:14px;margin:8px 0}
+    footer{text-align:center;color:var(--muted);margin-top:20px;font-size:13px}
   </style>
 </head>
 <body>
-  <header>
-    <h1>VrizCoinDash</h1>
-    <div id="controls">
-      <button onclick="showList()">Market</button>
-      <button onclick="showFavs()">Favorites</button>
-      <input id="search" placeholder="Search" oninput="filterList()" />
-      <select id="order" onchange="changeOrder(this.value)">
-        <option value="market_cap_desc">Market Cap ↓</option>
-        <option value="market_cap_asc">Market Cap ↑</option>
-        <option value="volume_desc">Volume ↓</option>
-        <option value="volume_asc">Volume ↑</option>
-      </select>
-    </div>
-  </header>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo">VC</div>
+        <h1>VrizCoinDash</h1>
+      </div>
+      <div class="searchbar">
+        <input id="search" placeholder="Search...">
+        <select id="vs_currency"><option value="usd">USD</option><option value="idr">IDR</option><option value="btc">BTC</option></select>
+        <select id="order"><option value="market_cap_desc">MCap ↓</option><option value="market_cap_asc">MCap ↑</option><option value="volume_desc">Volume ↓</option></select>
+        <button id="refresh">Refresh</button>
+      </div>
+    </header>
 
-  <div id="market-list"></div>
-  <div id="detail">
-    <button onclick="backToList()">← Back</button>
-    <h2 id="detail-title"></h2>
-    <canvas id="chart" height="120"></canvas>
-    <div id="detail-info"></div>
+    <main class="layout">
+      <section>
+        <div class="card">
+          <strong>Markets</strong> <span id="subtitle" class="small"></span>
+          <div id="list" class="market-list"></div>
+          <div id="list-loading" class="loading">Loading...</div>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </section>
+
+      <aside class="rightpanel">
+        <div id="detail-card" class="card">
+          <div id="detail-loading" class="loading">Pilih koin...</div>
+          <div id="detail" style="display:none">
+            <div style="display:flex;gap:10px;align-items:center">
+              <img id="detail-img" width="48" height="48" style="border-radius:8px" />
+              <div>
+                <div><strong id="detail-name"></strong> <span id="detail-symbol" class="small"></span></div>
+                <div class="small" id="detail-marketcap"></div>
+              </div>
+            </div>
+            <div class="detail-chart card" style="margin-top:12px;padding:8px">
+              <canvas id="priceChart"></canvas>
+            </div>
+            <div id="meta" class="meta"></div>
+            <div id="description" class="small" style="margin-top:10px"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer>Built with CoinGecko API • Proxy fallback enabled</footer>
   </div>
 
   <script>
-    const API_ROOT='https://api.coingecko.com/api/v3';
-    const PROXY='https://corsproxy.io/?';
-    let page=1,perPage=20,order='market_cap_desc',vs_currency='usd';
-    const els={list:document.getElementById('market-list'),detail:document.getElementById('detail'),detailTitle:document.getElementById('detail-title'),detailInfo:document.getElementById('detail-info'),search:document.getElementById('search')};
+  (function(){
+    const API = 'https://api.coingecko.com/api/v3';
+    const PROXY = 'https://corsproxy.io/?';
+    const perPage=20; let page=1; let order='market_cap_desc'; let vs_currency='usd';
+    const els={list:document.getElementById('list'),loading:document.getElementById('list-loading'),subtitle:document.getElementById('subtitle'),pagination:document.getElementById('pagination'),search:document.getElementById('search'),vs:document.getElementById('vs_currency'),order:document.getElementById('order'),refresh:document.getElementById('refresh'),detail:document.getElementById('detail'),detailLoading:document.getElementById('detail-loading'),detailName:document.getElementById('detail-name'),detailSymbol:document.getElementById('detail-symbol'),detailImg:document.getElementById('detail-img'),detailMarketcap:document.getElementById('detail-marketcap'),meta:document.getElementById('meta'),desc:document.getElementById('description')};
 
-    async function safeFetch(url){
-      try{
-        const res=await fetch(url);
-        if(!res.ok) throw new Error(res.status);
-        return res;
-      }catch(e){
-        console.warn('Direct fetch failed, trying proxy',e);
-        return fetch(PROXY+url);
+    function formatCurrency(v){if(v==null)return '-'; if(vs_currency==='usd')return '$'+v.toLocaleString(); if(vs_currency==='idr')return 'Rp '+v.toLocaleString(); return v.toLocaleString()+' '+vs_currency.toUpperCase();}
+    function fmt(n){if(!n)return '-'; if(n>=1e9)return(n/1e9).toFixed(2)+'B'; if(n>=1e6)return(n/1e6).toFixed(2)+'M'; if(n>=1e3)return(n/1e3).toFixed(2)+'K'; return n.toLocaleString();}
+
+    async function fetchJson(url){
+      try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);return await r.json()}catch(e){
+        const r=await fetch(PROXY+url);if(!r.ok)throw new Error(r.status);return await r.json()
       }
     }
 
-    async function fetchMarkets(){
-      els.list.innerHTML='<div class="loading">Loading...</div>';
-      const q=new URLSearchParams({vs_currency,order,per_page:perPage,page,sparkline:'false'}).toString();
-      try{
-        const res=await safeFetch(`${API_ROOT}/coins/markets?${q}`);
-        if(!res.ok) throw new Error('Error '+res.status);
-        const data=await res.json();
-        localStorage.setItem('vriz_cache', JSON.stringify({time:Date.now(), data}));
-        renderMarkets(data);
-      }catch(e){
-        console.error(e);
-        const cache=localStorage.getItem('vriz_cache');
-        if(cache){
-          const {time,data}=JSON.parse(cache);
-          renderMarkets(data);
-          const msg=document.createElement('div');
-          msg.className='small';
-          msg.textContent=`⚠️ Data dari cache (${new Date(time).toLocaleTimeString()}) karena gagal fetch: ${e.message}`;
-          els.list.prepend(msg);
-        }else{
-          els.list.innerHTML=`<div class="loading">Gagal memuat pasar — ${e.message}</div>`;
-        }
-      }
+    async function loadMarkets(){
+      els.list.innerHTML=''; els.loading.style.display='block';
+      const q=new URLSearchParams({vs_currency,order,per_page:perPage,page}).toString();
+      try{const data=await fetchJson(`${API}/coins/markets?${q}`); renderMarkets(data);}catch(e){els.list.innerHTML='<div class="error">Error loading markets: '+e+'</div>'}
+      els.loading.style.display='none'; els.subtitle.textContent=`Page ${page}`;
     }
 
-    function renderMarkets(data){
-      els.list.innerHTML='';
-      data.forEach(c=>{
-        const div=document.createElement('div');
-        div.className='coin';
-        const change=c.price_change_percentage_24h;
-        div.innerHTML=`
-          <div class="coin-header">
-            <img src="${c.image}" alt="${c.name}"/>
-            <div class="coin-name">${c.name} (${c.symbol.toUpperCase()})</div>
-          </div>
-          <div class="coin-price">$${c.current_price.toLocaleString()}</div>
-          <div class="coin-change ${change>=0?'up':'down'}">${change?change.toFixed(2):0}%</div>
-        `;
-        div.onclick=()=>showDetail(c.id);
-        els.list.appendChild(div);
+    function renderMarkets(coins){
+      coins.forEach((c,i)=>{
+        const r=document.createElement('div');r.className='row';
+        r.innerHTML=`<div class="rank">${(page-1)*perPage+i+1}</div>
+        <div class="coininfo"><div class="coinimg"><img src="${c.image}" width=32 height=32></div>
+        <div class="coinname"><strong>${c.name}</strong><div class="symbol">${c.symbol.toUpperCase()}</div></div></div>
+        <div class="price">${formatCurrency(c.current_price)}</div>
+        <div class="price small">MCap ${fmt(c.market_cap)}</div>
+        <div class="price small ${c.price_change_percentage_24h>=0?'change positive':'change negative'}">${c.price_change_percentage_24h?c.price_change_percentage_24h.toFixed(2)+'%':'-'}</div>`;
+        r.onclick=()=>{location.hash='#/coin/'+c.id}; els.list.appendChild(r);
       });
+      els.pagination.innerHTML=`<button ${page<=1?'disabled':''} onclick="page--;loadMarkets()">‹ Prev</button><span class=small>Page ${page}</span><button onclick="page++;loadMarkets()">Next ›</button>`;
     }
 
-    async function showDetail(id){
-      els.list.style.display='none';
-      els.detail.style.display='block';
-      els.detailTitle.textContent='Loading...';
-      els.detailInfo.innerHTML='';
+    let chart=null;
+    async function showCoin(id){
+      els.detail.style.display='none'; els.detailLoading.style.display='block';
       try{
-        const [coin,mkt]=await Promise.all([
-          safeFetch(`${API_ROOT}/coins/${id}`).then(r=>r.json()),
-          safeFetch(`${API_ROOT}/coins/${id}/market_chart?vs_currency=${vs_currency}&days=7`).then(r=>r.json())
-        ]);
-        els.detailTitle.textContent=`${coin.name} (${coin.symbol.toUpperCase()})`;
-        els.detailInfo.innerHTML=`<p>Current Price: $${coin.market_data.current_price[vs_currency]}</p>`;
-        renderChart(mkt.prices);
-      }catch(e){
-        els.detailTitle.textContent='Error loading detail';
-      }
+        const info=await fetchJson(`${API}/coins/${id}`);
+        const market=await fetchJson(`${API}/coins/${id}/market_chart?vs_currency=${vs_currency}&days=30&interval=daily`);
+        els.detailName.textContent=info.name; els.detailSymbol.textContent=info.symbol.toUpperCase();
+        els.detailImg.src=info.image.thumb||''; els.detailMarketcap.textContent=`Rank #${info.market_cap_rank||'-'} • MCap: ${fmt(info.market_data?.market_cap?.[vs_currency])}`;
+        els.meta.innerHTML='';
+        [['Price',formatCurrency(info.market_data?.current_price?.[vs_currency])],['24h',info.market_data?.price_change_percentage_24h?.toFixed(2)+'%']].forEach(m=>{
+          if(!m[1])return; const el=document.createElement('div');el.className='m';el.innerHTML=`<div class=small>${m[0]}</div><div><strong>${m[1]}</strong></div>`;els.meta.appendChild(el)
+        });
+        els.desc.textContent=(info.description?.en||'').slice(0,500);
+        // Chart
+        const ctx=document.getElementById('priceChart').getContext('2d'); if(chart)chart.destroy();
+        const labels=market.prices.map(p=>new Date(p[0]).toLocaleDateString());
+        const data=market.prices.map(p=>p[1]);
+        const up=data[data.length-1]>=data[0];
+        const gradient=ctx.createLinearGradient(0,0,0,300);gradient.addColorStop(0,up?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.4)');gradient.addColorStop(1,'rgba(255,255,255,0)');
+        chart=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Price',data,borderColor:up?'#22c55e':'#ef4444',backgroundColor:gradient,fill:true,tension:.25}]},options:{plugins:{tooltip:{callbacks:{label:ctx=>formatCurrency(ctx.parsed.y)}}},scales:{x:{ticks:{color:'#aaa'}},y:{ticks:{color:'#aaa'}}}}});
+        els.detailLoading.style.display='none'; els.detail.style.display='block';
+      }catch(e){els.detailLoading.innerHTML='<div class="error">Error loading detail: '+e+'</div>';}
     }
 
-    function renderChart(prices){
-      const ctx=document.getElementById('chart').getContext('2d');
-      new Chart(ctx,{type:'line',data:{labels:prices.map(p=>new Date(p[0]).toLocaleDateString()),datasets:[{label:'Price',data:prices.map(p=>p[1]),borderColor:'#58a6ff',backgroundColor:'rgba(88,166,255,.1)'}]},options:{plugins:{legend:{labels:{color:'#e6edf3'}}},scales:{x:{ticks:{color:'#e6edf3'}},y:{ticks:{color:'#e6edf3'}}}}});
-    }
-
-    function backToList(){els.detail.style.display='none';els.list.style.display='grid';}
-    function showList(){els.detail.style.display='none';els.list.style.display='grid';fetchMarkets();}
-    function showFavs(){alert('Favorites not implemented yet')}
-    function changeOrder(o){order=o;fetchMarkets();}
-    function filterList(){const q=els.search.value.toLowerCase();document.querySelectorAll('.coin').forEach(div=>{div.style.display=div.textContent.toLowerCase().includes(q)?'block':'none'});}
-
-    fetchMarkets();
+    function router(){if(location.hash.startsWith('#/coin/')){showCoin(location.hash.split('/')[2])}else{loadMarkets()}}
+    els.search.oninput=()=>loadMarkets(); els.order.onchange=()=>{order=els.order.value;loadMarkets()}; els.vs.onchange=()=>{vs_currency=els.vs.value;router()}; els.refresh.onclick=()=>loadMarkets();
+    window.onhashchange=router; router();
+  })();
   </script>
 </body>
 </html>

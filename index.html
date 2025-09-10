@@ -3,15 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CryptoDash Pro — Coin Detail (CoinCap)</title>
+<title>CryptoDash Pro — CoinCap + Proxy (GitHub Pages)</title>
 <link rel="icon" href="data:," />
 <style>
-  :root{
-    --bg:#071026; --panel:#07182a; --muted:#98a4b2; --accent:#00d1b2; --danger:#ff6b6b;
-    --glass: rgba(255,255,255,0.02);
-  }
+  :root{--bg:#071026;--panel:#07182a;--muted:#98a4b2;--accent:#00d1b2;--danger:#ff6b6b;--glass:rgba(255,255,255,0.02)}
   *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto}
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#021021);color:#e6eef6}
+  body{margin:0;background:linear-gradient(180deg,var(--bg),#021021);color:#e6eef6}
   .wrap{max-width:1200px;margin:18px auto;padding:16px}
   header{display:flex;justify-content:space-between;align-items:center;gap:12px}
   .brand{display:flex;gap:12px;align-items:center}
@@ -37,11 +34,11 @@
   .empty{padding:40px;text-align:center;color:var(--muted)}
   footer{margin-top:16px;color:var(--muted);font-size:13px}
   .small{font-size:12px;color:var(--muted)}
+  .error{background:#2b0710;color:#ffd4d4;padding:10px;border-radius:8px;margin:10px 0}
 </style>
 
-<!-- Lightweight Charts for candlestick -->
+<!-- Chart libs -->
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-<!-- Chart.js for tiny sparklines -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -51,7 +48,7 @@
         <div class="logo">CD</div>
         <div>
           <div style="font-weight:700;font-size:18px">CryptoDash Pro</div>
-          <div class="muted small">Beautiful market explorer — data: CoinCap</div>
+          <div class="muted small">CoinCap via CORS proxy • SPA for GitHub Pages</div>
         </div>
       </div>
 
@@ -63,13 +60,15 @@
     </header>
 
     <main id="appMain">
-      <!-- LIST PAGE -->
+      <!-- LIST -->
       <section id="listPage">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <div><strong id="statsCount">—</strong> <span class="muted">coins</span></div>
             <div class="muted">Watchlist: <span id="favCount">0</span></div>
           </div>
+
+          <div id="marketError"></div>
 
           <div style="overflow:auto">
             <table>
@@ -82,7 +81,7 @@
         </div>
       </section>
 
-      <!-- DETAIL PAGE -->
+      <!-- DETAIL -->
       <section id="detailPage" style="display:none">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <div style="display:flex;gap:12px;align-items:center">
@@ -94,6 +93,8 @@
 
         <div class="grid">
           <div class="card">
+            <div id="detailError"></div>
+
             <div class="range-buttons" role="tablist" aria-label="Range">
               <button data-days="1" class="rangeBtn">1D</button>
               <button data-days="7" class="rangeBtn">7D</button>
@@ -109,14 +110,14 @@
             </div>
 
             <div id="tvchart" class="card" style="margin-top:8px;padding:8px"></div>
-            <div id="chartNote" class="muted small" style="margin-top:8px">Candlestick chart — data source: CoinCap (converted to OHLC where necessary)</div>
+            <div id="chartNote" class="muted small" style="margin-top:8px">Candlestick chart — data converted to OHLC from CoinCap history via proxy.</div>
           </div>
 
           <aside class="card">
             <div style="display:flex;flex-direction:column;gap:12px">
               <div>
                 <strong>About</strong>
-                <div id="coinDesc" class="muted small" style="margin-top:6px;max-height:160px;overflow:auto">Description not provided by CoinCap — use external source if needed.</div>
+                <div id="coinDesc" class="muted small" style="margin-top:6px;max-height:160px;overflow:auto">Description not provided by CoinCap.</div>
               </div>
 
               <div>
@@ -145,54 +146,62 @@
       </section>
     </main>
 
-    <footer class="muted">Built with CoinCap API • Drop into GitHub Pages as index.html</footer>
+    <footer class="muted">Built with CoinCap & corsproxy.io • For production use a private proxy (Cloudflare Worker / Netlify function).</footer>
   </div>
 
 <script>
-/* -------- CONFIG & STATE -------- */
+/* ===== CONFIG ===== */
+// Using public proxy so browser can fetch CoinCap from GitHub Pages.
+// corsproxy.io usage: https://corsproxy.io/?https://api.coincap.io/v2/assets
+const PROXY = 'https://corsproxy.io/?'
 const API_BASE = 'https://api.coincap.io/v2'
 const state = {
   coins: [],
   favorites: new Set(JSON.parse(localStorage.getItem('cd:cap:favs')||'[]')),
   current: null,
-  lastChartRaw: null, // store raw price points used to create chart (for indicators)
+  lastChartRaw: null
+}
+const $ = s => document.querySelector(s)
+
+/* ===== NETWORK (via proxy) ===== */
+async function proxyFetch(path){
+  // path is the full API URL (like `${API_BASE}/assets?limit=200`)
+  const url = PROXY + encodeURIComponent(path)
+  const res = await fetch(url)
+  if(!res.ok) throw new Error(`Proxy ${res.status}`)
+  const json = await res.json()
+  // corsproxy.io returns the proxied body raw when successful.
+  // If proxied endpoint returns JSON, json will be that JSON.
+  return json
 }
 
-/* -------- HELPERS -------- */
-const $ = sel => document.querySelector(sel)
-function fmt(n){ if(n===null||n===undefined) return '—'; const num = Number(n); if(isNaN(num)) return n; if(Math.abs(num)>1e12) return (num/1e12).toFixed(2)+'T'; if(Math.abs(num)>1e9) return (num/1e9).toFixed(2)+'B'; if(Math.abs(num)>1e6) return (num/1e6).toFixed(2)+'M'; if(Math.abs(num)>1e3) return (num/1e3).toFixed(2)+'k'; return num.toLocaleString() }
-function safeFetch(url){ return fetch(url).then(r=>{ if(!r.ok) throw new Error(r.status+' '+r.statusText); return r.json() }) }
-
-/* -------- API WRAPPERS (CoinCap) -------- */
-async function fetchMarkets(limit=100){
-  const url = `${API_BASE}/assets?limit=${limit}`
-  return safeFetch(url).then(d=>d.data)
-}
-async function fetchAsset(id){
-  // id in CoinCap is e.g. bitcoin, ethereum
-  const url = `${API_BASE}/assets/${id}`
-  return safeFetch(url).then(d=>d.data)
-}
-async function fetchHistory(id, interval, start, end){
-  // interval: m1,h1,d1 ; start/end in ms
-  const url = `${API_BASE}/assets/${id}/history?interval=${interval}&start=${start}&end=${end}`
-  return safeFetch(url).then(d=>d.data) // returns array of { price, time }
+// convenience wrapper for CoinCap endpoints
+async function coinCap(path){
+  const full = `${API_BASE}${path}`
+  const j = await proxyFetch(full)
+  // coinCap returns { data: ..., timestamp: ... } ; but proxy returns same structure
+  return j
 }
 
-/* -------- LIST PAGE -------- */
+/* ===== HELPERS ===== */
+function fmt(n){ if(n==null) return '—'; const num = Number(n); if(isNaN(num)) return n; if(Math.abs(num)>1e12) return (num/1e12).toFixed(2)+'T'; if(Math.abs(num)>1e9) return (num/1e9).toFixed(2)+'B'; if(Math.abs(num)>1e6) return (num/1e6).toFixed(2)+'M'; if(Math.abs(num)>1e3) return (num/1e3).toFixed(2)+'k'; return num.toLocaleString() }
+
+/* ===== LOAD MARKET (LIST) ===== */
 async function loadMarket(){
+  $('#marketError').innerHTML = ''
+  $('#coinsTbody').innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>'
   try{
-    $('#coinsTbody').innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>'
-    const list = await fetchMarkets(200)
-    // sort by rank ascending
+    const resp = await coinCap('/assets?limit=200') // proxied
+    const list = resp && resp.data ? resp.data : []
     list.sort((a,b)=> Number(a.rank) - Number(b.rank))
     state.coins = list
     renderList(list)
     $('#statsCount').textContent = list.length
     $('#favCount').textContent = state.favorites.size
-  }catch(e){
-    console.error(e)
-    $('#coinsTbody').innerHTML = `<tr><td colspan="7" class="muted">Gagal memuat pasar: ${e.message}</td></tr>`
+  }catch(err){
+    console.error('market load', err)
+    $('#marketError').innerHTML = `<div class="error">Gagal memuat pasar: ${err.message}. Jika error CORS/pemblokiran, pertimbangkan proxy yang berbeda atau server-proxy sendiri.</div>`
+    $('#coinsTbody').innerHTML = '<tr><td colspan="7" class="muted">—</td></tr>'
   }
 }
 
@@ -204,7 +213,7 @@ function renderList(list){
     tr.innerHTML = `
       <td style="width:48px">${c.rank ?? (i+1)}</td>
       <td style="min-width:220px"><strong>${c.name}</strong> <div class="muted small">${c.symbol}</div></td>
-      <td>${Number(c.priceUsd).toFixed(6)}</td>
+      <td>${Number(c.priceUsd || 0).toFixed(6)}</td>
       <td style="color:${pct>=0? '#4ade80':'#ff8383'}">${pct!==null? pct.toFixed(2)+'%':'—'}</td>
       <td class="muted">${fmt(c.marketCapUsd)}</td>
       <td><canvas class="spark" data-idx="${i}" width="120" height="36"></canvas></td>
@@ -212,38 +221,35 @@ function renderList(list){
     `
     tbody.appendChild(tr)
   })
-  // attach listeners
+  // listeners
   document.querySelectorAll('.pill[data-action="open"]').forEach(b=>b.onclick = e => {
     const id = e.target.dataset.id
     location.hash = '#/coin/' + id
   })
   document.querySelectorAll('.fav').forEach(b=>b.onclick = toggleFav)
-  // draw tiny sparklines: for speed, we use recent price from state (CoinCap does not include sparkline, so approximate using history fetch per coin is heavy).
-  // Instead, we'll draw a placeholder flat sparkline (cheap) and fetch actual history when user opens detail.
-  document.querySelectorAll('.spark').forEach(cv => {
+  // draw decorative sparklines quickly (randomized small lines) to keep UI lively
+  document.querySelectorAll('.spark').forEach(cv=>{
     const ctx = cv.getContext('2d')
-    // simple decorative line
     new Chart(ctx, {
       type:'line',
       data:{ labels: new Array(20).fill('').map((_,i)=>i), datasets:[{ data: new Array(20).fill(0).map(()=>Math.random()*1.2), borderWidth:1, pointRadius:0 }]},
-      options:{ animation:false, plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}}}
+      options:{ animation:false, plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}}, elements:{line:{tension:0.4}}}
     })
   })
 }
 
-/* -------- FAVORITES -------- */
+/* ===== FAVORITES ===== */
 function toggleFav(e){
   const id = e.target.dataset.id
   if(!id) return
   if(state.favorites.has(id)) state.favorites.delete(id)
   else state.favorites.add(id)
   localStorage.setItem('cd:cap:favs', JSON.stringify([...state.favorites]))
-  // update UI
   document.querySelectorAll(`.fav[data-id="${id}"]`).forEach(btn => btn.textContent = state.favorites.has(id)? '★' : '☆')
   $('#favCount').textContent = state.favorites.size
 }
 
-/* -------- ROUTING: simple hash router -------- */
+/* ===== ROUTER ===== */
 window.addEventListener('hashchange', route)
 function showList(){
   $('#detailPage').style.display = 'none'; $('#listPage').style.display = 'block'
@@ -261,145 +267,108 @@ function route(){
   }
 }
 
-/* -------- DETAIL PAGE & CHART -------- */
+/* ===== DETAIL & CHART ===== */
 let chart = null, candleSeries = null, smaSeries = null, emaSeries = null
 
 async function showDetail(id){
+  $('#detailError').innerHTML = ''
   try{
     $('#listPage').style.display='none'; $('#detailPage').style.display='block'
     $('#coinTitle').textContent = 'Loading…'
-    $('#coinDesc').textContent = ''
-    $('#coinLinks').textContent = ''
-    $('#coinRank').textContent = '—'
-    $('#coinMarketCap').textContent = '—'
-    $('#coinVolume').textContent = '—'
-    $('#coinSupply').textContent = '—'
-    $('#coinPrice').textContent = '—'
-
-    // fetch asset metadata and 90-day history as default
     state.current = id
-    const [meta, hist90] = await Promise.all([
-      fetchAsset(id).catch(e=>{ console.warn('meta fail',e); return null }),
-      // history: we request daily points for last 365 days, but limit to 90 for chart performance
-      (async ()=>{
-        const now = Date.now()
-        const start = now - (365*24*3600*1000) // 1 year back
-        // CoinCap allows interval d1,h1,m1
-        return fetchHistory(id, 'd1', start, now).catch(e=>{ console.warn('history fail',e); return [] })
-      })()
-    ])
 
-    // fill stats from meta if available
+    // fetch metadata
+    const metaResp = await coinCap(`/assets/${id}`)
+    const meta = metaResp && metaResp.data ? metaResp.data : null
     if(meta){
       $('#coinTitle').textContent = `${meta.name} (${meta.symbol})`
-      $('#coinRank').textContent = meta.rank ?? '—'
+      $('#coinRank').textContent = meta.rank || '—'
       $('#coinMarketCap').textContent = meta.marketCapUsd ? fmt(meta.marketCapUsd) : '—'
       $('#coinVolume').textContent = meta.volumeUsd24Hr ? fmt(meta.volumeUsd24Hr) : '—'
       $('#coinSupply').textContent = meta.supply ? fmt(meta.supply) : '—'
-      $('#coinPrice').textContent = meta.priceUsd ? Number(meta.priceUsd).toFixed(6) : '—'
-      $('#coinDesc').innerHTML = '<i>Description not available in CoinCap. You can integrate CoinPaprika / CoinGecko for rich descriptions.</i>'
-      // CoinCap provides explorer or website? not usually; leave links empty or provide CoinCap page
+      $('#coinPrice').textContent = meta.priceUsd ? Number(meta.priceUsd).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:8}) : '—'
+      $('#coinDesc').innerHTML = '<i>Description not available via CoinCap. Add CoinGecko/CoinPaprika integration for rich descriptions.</i>'
       $('#coinLinks').innerHTML = `<a href="https://coincap.io/assets/${meta.id}" target="_blank" rel="noopener noreferrer">CoinCap page</a>`
     } else {
       $('#coinTitle').textContent = id
     }
 
-    // Choose range default 30D (button with data-days="30" has 'active' class in markup)
+    // default range days
     const defaultDays = 30
-    await loadChartRange(id, defaultDays, hist90)
-
-    // watchlist btn
+    await loadChartRange(id, defaultDays)
     $('#favBtn').textContent = state.favorites.has(id) ? '★ In Watchlist' : '☆ Add to Watchlist'
     $('#favBtn').onclick = ()=>{ if(state.favorites.has(id)) state.favorites.delete(id); else state.favorites.add(id); localStorage.setItem('cd:cap:favs', JSON.stringify([...state.favorites])); $('#favBtn').textContent = state.favorites.has(id) ? '★ In Watchlist' : '☆ Add to Watchlist'; $('#favCount').textContent = state.favorites.size }
-
-    $('#shareBtn').onclick = ()=>{ navigator.share ? navigator.share({title: meta?.name || id, text:'Lihat koin ini', url:location.href}) : prompt('Copy link', location.href) }
+    $('#shareBtn').onclick = ()=>{ navigator.share ? navigator.share({title:meta?.name||id, text:'Lihat koin ini', url:location.href}) : prompt('Copy link', location.href) }
   }catch(e){
-    console.error(e)
-    alert('Gagal muat detail: '+(e.message||e))
+    console.error('detail load', e)
+    $('#detailError').innerHTML = `<div class="error">Gagal muat detail: ${e.message}</div>`
     showList()
   }
 }
 
-/* Load chart for chosen range (days) — tries to fetch appropriate interval from CoinCap and aggregate into OHLC if needed */
-async function loadChartRange(id, days, maybeProvidedHistory){
+/* Load chart for a chosen days range.
+   We request CoinCap history (interval dynamic) via proxy, then bucket into OHLC candles.
+*/
+async function loadChartRange(id, days){
   try{
-    // UI: mark active button
+    // mark active
     document.querySelectorAll('.rangeBtn').forEach(b=>b.classList.toggle('active', Number(b.dataset.days)===Number(days)))
-    // determine interval param for CoinCap: use 'm1' for <=1 day with start/end, 'h1' for <=90days maybe, 'd1' otherwise
+
     const now = Date.now()
     const start = now - (days * 24 * 3600 * 1000)
+    // choose interval: CoinCap supports m1,h1,d1 (m1 availability can be limited), so we prefer:
     let interval = 'd1'
-    if(days <= 1) interval = 'm5' // CoinCap supports m1; but sometimes m5/m1 availability varies. Try m5 (fallback later)
+    if(days <= 1) interval = 'm1'
     else if(days <= 90) interval = 'h1'
     else interval = 'd1'
 
-    // try fetch history with determined interval
-    let history = []
+    // fetch history via proxy
+    // build path with proper ms timestamps: /assets/{id}/history?interval={interval}&start={start}&end={now}
+    let histResp = null
     try{
-      // Some CoinCap deployments are picky about start/end types; ensure integer ms values
-      history = await fetchHistory(id, interval, start, now)
-      // if not many points or empty, try fallback intervals
-      if(!history || history.length < 3){
-        if(interval !== 'h1') history = await fetchHistory(id, 'h1', start, now)
-        if(!history || history.length < 3) history = await fetchHistory(id, 'd1', start, now)
-      }
-    }catch(e){
-      console.warn('history initial fetch failed', e)
+      histResp = await coinCap(`/assets/${id}/history?interval=${interval}&start=${start}&end=${now}`)
+    }catch(err){
+      // fallback attempts
+      try{ histResp = await coinCap(`/assets/${id}/history?interval=h1&start=${start}&end=${now}`) } catch(e2){ try{ histResp = await coinCap(`/assets/${id}/history?interval=d1&start=${start}&end=${now}`) } catch(e3){ histResp = null } }
     }
 
-    // sometimes the caller provided a pre-fetched history (maybe longer). Prefer that if it covers requested range.
-    if(Array.isArray(maybeProvidedHistory) && maybeProvidedHistory.length && maybeProvidedHistory.length >= history.length){
-      // pick portion nearest to requested days
-      history = maybeProvidedHistory.filter(pt => Number(pt.time) >= start)
-    }
-
-    // history items: {price, time}
+    const history = (histResp && histResp.data) ? histResp.data : []
     if(!history || history.length === 0){
-      // no history -> show message
-      const tgt = document.getElementById('tvchart')
-      tgt.innerHTML = '<div class="empty">No historical price available for this range.</div>'
+      document.getElementById('tvchart').innerHTML = '<div class="empty">Tidak ada data historis untuk range ini.</div>'
       return
     }
 
-    // Convert history price points into OHLC candles: group into buckets depending on desired granularity
-    // If history already daily (each point is one day) we can transform to candle where open/high/low/close equal price (best-effort)
-    const candleBuckets = convertHistoryToOHLC(history, days)
-    // store raw for indicators
-    state.lastChartRaw = candleBuckets.map(c => ({ time: Math.floor(c[0]/1000), open:c[1], high:c[2], low:c[3], close:c[4] }))
+    // convert to OHLC candles
+    const candles = convertHistoryToOHLC(history, days)
+    // store raw for indicator computation (Lightweight expects {time,open,high,low,close})
+    const lcData = candles.map(c=>({ time: Math.floor(c[0]/1000), open:c[1], high:c[2], low:c[3], close:c[4] }))
+    state.lastChartRaw = lcData
 
-    // render chart with lightweight-charts
-    renderCandles(state.lastChartRaw)
-    // compute default indicators if toggled
+    renderCandles(lcData)
     if($('#smaToggle').checked) applySMA(state.lastChartRaw, 14)
     if($('#emaToggle').checked) applyEMA(state.lastChartRaw, 14)
   }catch(e){
-    console.error('loadChartRange fail', e)
-    const tgt = document.getElementById('tvchart')
-    tgt.innerHTML = `<div class="empty">Error loading chart: ${e.message}</div>`
+    console.error('loadChartRange', e)
+    document.getElementById('tvchart').innerHTML = `<div class="empty">Error loading chart: ${e.message}</div>`
   }
 }
 
-/* Convert CoinCap history (price points) into OHLC candle array:
-   Input: history = [{price: "...", time: 163...}, ...]
-   Output: [[tsMillis, open, high, low, close], ...]
-   Strategy: choose bucket size based on days requested: for small days aggregate shorter buckets; else daily.
-*/
+/* convert history points ({price, time}) into OHLC bucketed candles */
 function convertHistoryToOHLC(history, days){
-  // ensure numeric time and price
-  const pts = history.map(p => ({ t: Number(p.time), v: Number(p.price) || Number(p.priceUsd) || Number(p.priceUsd) } )).filter(p=>p.t && !isNaN(p.v))
+  // normalise points
+  const pts = history.map(p => ({ t: Number(p.time), v: Number(p.price) || Number(p.priceUsd) })).filter(p=>p.t && !isNaN(p.v))
   if(pts.length === 0) return []
-
-  // Determine bucket size heuristically:
-  // If history points are already spaced >= 24h, treat as daily
-  const diffs = []
-  for(let i=1;i<pts.length;i++) diffs.push(pts[i].t - pts[i-1].t)
-  const avgDiff = diffs.length ? diffs.reduce((a,b)=>a+b,0)/diffs.length : 24*3600*1000
+  // estimate spacing
+  let avgDiff = 24*3600*1000
+  if(pts.length > 1){
+    const diffs = []
+    for(let i=1;i<pts.length;i++) diffs.push(pts[i].t - pts[i-1].t)
+    avgDiff = diffs.reduce((a,b)=>a+b,0)/diffs.length
+  }
+  // select bucket size
   let bucket = 24*3600*1000
-  if(avgDiff <= 60*60*1000) bucket = 60*60*1000 // hourly data -> keep hourly
+  if(avgDiff <= 60*60*1000) bucket = 60*60*1000
   else if(avgDiff <= 6*60*60*1000) bucket = 3*60*60*1000
-  else bucket = 24*3600*1000
-
-  // For very small range like 1D, create buckets of 5min if possible
   if(days <= 1 && pts.length > 120) bucket = 5*60*1000
 
   const buckets = {}
@@ -409,102 +378,93 @@ function convertHistoryToOHLC(history, days){
     buckets[b].push(p.v)
   })
   const keys = Object.keys(buckets).map(k=>Number(k)).sort((a,b)=>a-b)
-  const candles = keys.map(k=>{
+  return keys.map(k=>{
     const arr = buckets[k]
     return [k, arr[0], Math.max(...arr), Math.min(...arr), arr[arr.length-1]]
   })
-  return candles
 }
 
-/* RENDER CHART (Lightweight Charts candlestick) */
-function renderCandles(candleData){
-  const target = document.getElementById('tvchart')
-  target.innerHTML = ''
-  if(chart) chart.remove()
-  chart = LightweightCharts.createChart(target, {
+/* render with Lightweight Charts */
+let chartObj = null
+function renderCandles(data){
+  const tgt = document.getElementById('tvchart'); tgt.innerHTML = ''
+  if(chartObj) chartObj.remove()
+  chartObj = LightweightCharts.createChart(tgt, {
     layout:{background:{color:'transparent'},textColor:'#cfd8e3'},
     grid:{vertLines:{color:'#19303f'},horzLines:{color:'#19303f'}},
     rightPriceScale:{borderColor:'#2b5878'},
-    timeScale:{borderVisible:true, borderColor:'#2b5878'}
+    timeScale:{borderVisible:true}
   })
-  candleSeries = chart.addCandlestickSeries()
-  candleSeries.setData(candleData)
-  // update priceNow
-  const last = candleData[candleData.length-1]
-  if(last) $('#priceNow').textContent = (Number(last.close)).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})
+  candleSeries = chartObj.addCandlestickSeries()
+  candleSeries.setData(data)
+  const last = data[data.length-1]
+  if(last) $('#priceNow').textContent = Number(last.close).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:8})
 }
 
-/* INDICATORS: SMA & EMA */
-let smaApplied = false, emaApplied = false
+/* SMA & EMA */
+let smaSeries = null, emaSeries = null
 function applySMA(data, period=14){
-  if(!chart || !data || data.length < period) return
+  if(!chartObj || !data || data.length < period) return
   if(smaSeries) smaSeries.remove()
   const closes = data.map(d=>d.close)
   const sma = simpleMA(closes, period)
-  const smaData = sma.map((v,i)=>({ time: data[i+period-1].time, value: v })).filter(Boolean)
-  smaSeries = chart.addLineSeries({ color: '#ffcc00', lineWidth: 1.4 })
+  const smaData = sma.map((v,i)=>({ time:data[i+period-1].time, value:v })).filter(Boolean)
+  smaSeries = chartObj.addLineSeries({ color:'#ffcc00', lineWidth:1.4 })
   smaSeries.setData(smaData)
-  smaApplied = true
 }
 function applyEMA(data, period=14){
-  if(!chart || !data || data.length < period) return
+  if(!chartObj || !data || data.length < period) return
   if(emaSeries) emaSeries.remove()
   const closes = data.map(d=>d.close)
   const ema = expMA(closes, period)
-  const emaData = ema.map((v,i)=>({ time: data[i+period-1].time, value: v })).filter(Boolean)
-  emaSeries = chart.addLineSeries({ color: '#00a3ff', lineWidth: 1.3 })
+  const emaData = ema.map((v,i)=>({ time:data[i+period-1].time, value:v })).filter(Boolean)
+  emaSeries = chartObj.addLineSeries({ color:'#00a3ff', lineWidth:1.3 })
   emaSeries.setData(emaData)
-  emaApplied = true
 }
-function removeSMA(){ if(smaSeries){ smaSeries.remove(); smaSeries = null; smaApplied = false } }
-function removeEMA(){ if(emaSeries){ emaSeries.remove(); emaSeries = null; emaApplied = false } }
+function removeSMA(){ if(smaSeries){ smaSeries.remove(); smaSeries=null } }
+function removeEMA(){ if(emaSeries){ emaSeries.remove(); emaSeries=null } }
 
 function simpleMA(arr, period){
-  const out = []
+  const out=[]
   for(let i=0;i<=arr.length-period;i++){
-    const slice = arr.slice(i, i+period)
-    const s = slice.reduce((a,b)=>a+b,0)/period
+    const s = arr.slice(i,i+period).reduce((a,b)=>a+b,0)/period
     out.push(s)
   }
   return out
 }
 function expMA(arr, period){
   const k = 2/(period+1)
-  const out = []
+  const out=[]
   let prev = arr.slice(0,period).reduce((a,b)=>a+b,0)/period
   for(let i=period;i<arr.length;i++){
     const v = arr[i]*k + prev*(1-k)
-    out.push(v)
-    prev = v
+    out.push(v); prev = v
   }
   return out
 }
 
-/* -------- UI INTERACTIONS -------- */
+/* UI handlers */
 $('#backBtn').onclick = ()=>{ location.hash = '/' }
 $('#themeBtn').onclick = ()=>{ document.documentElement.toggleAttribute('data-theme','light') }
 document.querySelectorAll('.rangeBtn').forEach(b => b.onclick = async (e)=>{
   const days = Number(e.target.dataset.days)
-  // ask loadChartRange to recalc using days and current id
   if(!state.current) return
   await loadChartRange(state.current, days)
 })
 $('#smaToggle').onchange = ()=>{ if($('#smaToggle').checked) applySMA(state.lastChartRaw || [], 14); else removeSMA() }
 $('#emaToggle').onchange = ()=>{ if($('#emaToggle').checked) applyEMA(state.lastChartRaw || [], 14); else removeEMA() }
 
-/* SEARCH */
 $('#search').addEventListener('input', e=>{
   const q = e.target.value.trim().toLowerCase()
   if(!q){ renderList(state.coins); return }
   const filtered = state.coins.filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
   renderList(filtered)
 })
+$('#shareBtn').onclick = ()=>{ navigator.share ? navigator.share({title: document.title, text:'Lihat koin', url:location.href}) : prompt('Copy link', location.href) }
 
-/* SHARE fallback */
-$('#shareBtn').onclick = ()=>{ navigator.share ? navigator.share({title: document.title, text:'Check coin', url:location.href}) : prompt('Copy link', location.href) }
-
-/* -------- START -------- */
+/* start */
 loadMarket().then(()=>{ route(); $('#favCount').textContent = state.favorites.size })
+
 </script>
 </body>
 </html>
